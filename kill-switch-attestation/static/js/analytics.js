@@ -39,14 +39,27 @@ window.render_analytics = async function(container) {
                     datasets: [{
                         label: 'Total In-Flight Failures (Leaks)',
                         data: inFlightData,
-                        backgroundColor: '#cf6679'
+                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                        borderColor: '#ef4444',
+                        borderWidth: 1,
+                        borderRadius: 4
                     }]
                 },
                 options: {
                     responsive: true,
                     plugins: {
-                        legend: { position: 'top' },
-                        title: { display: true, text: 'In-Flight Failures by Strategy' }
+                        legend: { position: 'top', labels: { color: '#e0e0e0' } },
+                        title: { display: true, text: 'In-Flight Failures by Strategy', color: '#e0e0e0', font: { size: 16 } }
+                    },
+                    scales: {
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { color: '#a1a1aa' }
+                        },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: '#a1a1aa' }
+                        }
                     }
                 }
             });

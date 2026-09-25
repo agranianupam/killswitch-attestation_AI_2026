@@ -26,6 +26,10 @@ function setupNavigation() {
 }
 
 function loadView(view) {
+    if(State.currentView && window[`cleanup_${State.currentView}`]) {
+        window[`cleanup_${State.currentView}`]();
+    }
+    
     State.currentView = view;
     document.querySelectorAll('.sidebar a').forEach(link => {
         if(link.getAttribute('data-view') === view) link.classList.add('active');
