@@ -1,0 +1,7 @@
+keys/private_key.pem
+*.pem
+*.db
+__pycache__/
+.pytest_cache/
+*.pyc
+.env

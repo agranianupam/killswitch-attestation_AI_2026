@@ -1,0 +1,47 @@
+"""
+static/index.html — SPA shell
+"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kill-Switch Attestation Dashboard</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="dark-theme">
+    <nav class="sidebar">
+        <h2>Kill-Switch</h2>
+        <ul>
+            <li><a href="#" data-view="dashboard">Dashboard</a></li>
+            <li><a href="#" data-view="agent">Agent Details</a></li>
+            <li><a href="#" data-view="shutdown">Emergency Shutdown</a></li>
+            <li><a href="#" data-view="report">Shutdown Report</a></li>
+            <li><a href="#" data-view="experiments">Experiments</a></li>
+            <li><a href="#" data-view="analytics">Analytics</a></li>
+            <li><a href="#" data-view="audit">Audit Logs</a></li>
+        </ul>
+        <div id="auth-section">
+            <!-- Login or Logout button depending on state -->
+        </div>
+    </nav>
+    <main id="app-content">
+        <!-- Views injected here by app.js -->
+    </main>
+
+    <!-- Modal template -->
+    <div id="modal" class="modal hidden">
+        <div class="modal-content" id="modal-content"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/js/app.js"></script>
+    <script src="/js/dashboard.js"></script>
+    <script src="/js/agent.js"></script>
+    <script src="/js/shutdown.js"></script>
+    <script src="/js/report.js"></script>
+    <script src="/js/experiments.js"></script>
+    <script src="/js/analytics.js"></script>
+    <script src="/js/audit.js"></script>
+</body>
+</html>
