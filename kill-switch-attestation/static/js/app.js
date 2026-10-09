@@ -5,7 +5,8 @@ static/js/app.js — Router, WS client, shared state
 const State = {
     token: localStorage.getItem('ks_token') || null,
     currentView: 'dashboard',
-    ws: null
+    ws: null,
+    latestShutdownId: null
 };
 
 function init() {
@@ -13,6 +14,12 @@ function init() {
     setupWebSocket();
     renderAuth();
     loadView('dashboard');
+    
+    // Update clock every second
+    setInterval(() => {
+        const clock = document.getElementById('header-clock');
+        if(clock) clock.textContent = new Date().toLocaleTimeString();
+    }, 1000);
 }
 
 function setupNavigation() {
@@ -25,6 +32,16 @@ function setupNavigation() {
     });
 }
 
+const VIEW_TITLES = {
+    'dashboard': { title: 'Live Dashboard', desc: 'Real-time telemetry and kill-switch monitoring.' },
+    'agent': { title: 'Agent Details', desc: 'Active credentials and risk profiling.' },
+    'shutdown': { title: 'Emergency Shutdown', desc: 'Administrative containment operations.' },
+    'report': { title: 'Shutdown Report', desc: 'Detailed outcome of containment events.' },
+    'experiments': { title: 'Simulations & Experiments', desc: 'Synthetic workload generation and testing.' },
+    'analytics': { title: 'System Analytics', desc: 'Aggregated metrics and performance data.' },
+    'audit': { title: 'Cryptographic Audit', desc: 'Verifiable log chains and attestation signatures.' }
+};
+
 function loadView(view) {
     if(State.currentView && window[`cleanup_${State.currentView}`]) {
         window[`cleanup_${State.currentView}`]();
@@ -35,6 +52,12 @@ function loadView(view) {
         if(link.getAttribute('data-view') === view) link.classList.add('active');
         else link.classList.remove('active');
     });
+    
+    const titleObj = VIEW_TITLES[view] || { title: 'Overview', desc: '' };
+    const hTitle = document.getElementById('header-title');
+    const hDesc = document.getElementById('header-desc');
+    if (hTitle) hTitle.textContent = titleObj.title;
+    if (hDesc) hDesc.textContent = titleObj.desc;
 
     const content = document.getElementById('app-content');
     content.innerHTML = `<h2>Loading ${view}...</h2>`;
@@ -50,6 +73,14 @@ function setupWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     State.ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     
+    State.ws.onopen = () => {
+        const badge = document.getElementById('ws-status');
+        if (badge) {
+            badge.innerHTML = '● CONNECTED';
+            badge.style.color = 'var(--success)';
+        }
+    };
+
     State.ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
         const eventName = `ws_${msg.type}`;
@@ -58,6 +89,11 @@ function setupWebSocket() {
     };
     
     State.ws.onclose = () => {
+        const badge = document.getElementById('ws-status');
+        if (badge) {
+            badge.innerHTML = '● DISCONNECTED';
+            badge.style.color = 'var(--danger)';
+        }
         setTimeout(setupWebSocket, 2000); // reconnect
     };
 }
@@ -86,10 +122,17 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 
 function renderAuth() {
     const section = document.getElementById('auth-section');
-    if (State.token) {
-        section.innerHTML = `<button class="secondary" onclick="logout()">Logout</button>`;
-    } else {
-        section.innerHTML = `<button class="secondary" onclick="showLogin()">Login</button>`;
+    const headerUser = document.getElementById('header-user');
+    
+    // Hardcode for admin demonstration per user feedback
+    State.token = 'demo-admin-token';
+    
+    if (section) {
+        section.innerHTML = `<button style="width:100%" class="secondary" disabled>Authenticated as Admin</button>`;
+    }
+    if (headerUser) {
+        headerUser.textContent = 'Administrator';
+        headerUser.style.color = 'var(--success)';
     }
 }
 

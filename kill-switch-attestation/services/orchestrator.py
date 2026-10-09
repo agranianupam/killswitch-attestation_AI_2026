@@ -15,6 +15,8 @@ from services.agent_service import get_agent
 from services.credential_service import revoke_credential, get_credentials
 from services.probe_service import run_all_probes
 from models.database import AsyncSessionLocal, utcnow
+from datetime import timedelta
+import random
 import config
 from api.websocket import manager
 
@@ -111,7 +113,14 @@ async def _revoke_with_retries(credential_id: str, channel_type: str, shutdown_e
         return rev_evt
 
 
-async def run_shutdown(db: AsyncSession, agent_id: str, strategy: str, trigger_type: str) -> dict:
+async def run_shutdown(
+    db: AsyncSession,
+    agent_id: str,
+    strategy: str,
+    trigger_type: str = "manual",
+    triggered_by: str = "manual",
+    trigger_timestamp = None
+) -> dict:
     
     agent = await db.get(Agent, agent_id)
     if not agent:
@@ -119,12 +128,15 @@ async def run_shutdown(db: AsyncSession, agent_id: str, strategy: str, trigger_t
         
     agent.status = "SHUTDOWN_INITIATED"
     
+    now = utcnow()
     shutdown_event = ShutdownEvent(
         id=uuid.uuid4().hex,
         agent_id=agent_id,
         strategy=strategy,
         trigger_type=trigger_type,
-        started_at=utcnow()
+        triggered_by=triggered_by or trigger_type or "manual",
+        trigger_timestamp=trigger_timestamp or now,
+        started_at=now
     )
     db.add(shutdown_event)
     await db.commit()
@@ -179,7 +191,11 @@ async def run_shutdown(db: AsyncSession, agent_id: str, strategy: str, trigger_t
         
         if strategy == "C":
             if op.natural_end_time > shutdown_event.finished_at:
-                op.status = "CANCELLED"
+                if random.random() < config.IN_FLIGHT_LEAK_PROB:
+                    op.status = "COMPLETED_AFTER_SHUTDOWN"
+                    in_flight_failures += 1
+                else:
+                    op.status = "CANCELLED"
             else:
                 op.status = "COMPLETED"
         else: 
@@ -278,3 +294,89 @@ async def run_shutdown(db: AsyncSession, agent_id: str, strategy: str, trigger_t
         "residual_risk": residual_risk,
         "final_state": agent.status
     }
+
+
+async def execute_shutdown_cycle(
+    db: AsyncSession,
+    strategy: str = "A",
+    trigger_type: str = "manual",
+    triggered_by: str = "manual"
+) -> dict:
+    from models.credential import Credential, CHANNEL_TYPES
+    from services.operation_service import OPERATION_TYPES
+    
+    # 1. Provision sandboxed agent and credentials
+    agent_id = uuid.uuid4().hex
+    agent = Agent(
+        id=agent_id,
+        name=f"Sandboxed-Agent-{agent_id[:8]}",
+        status="ACTIVE",
+        risk_level="LOW"
+    )
+    db.add(agent)
+    for channel_type in CHANNEL_TYPES:
+        cred_val = f"mock-{channel_type}-{uuid.uuid4().hex[:6]}"
+        cred = Credential(
+            id=uuid.uuid4().hex,
+            agent_id=agent.id,
+            channel_type=channel_type,
+            credential_value=cred_val,
+            status="ACTIVE"
+        )
+        db.add(cred)
+    await db.commit()
+    await db.refresh(agent)
+    
+    await manager.broadcast({
+        "type": "shutdown_progress",
+        "data": {
+            "stage": "provisioning",
+            "detail": f"Provisioned agent {agent.name} with active credentials."
+        }
+    })
+    
+    # 2. Agent starts in-flight operations
+    start_time = utcnow()
+    created_ops = []
+    for _ in range(3):
+        op_id = uuid.uuid4().hex
+        op_type = random.choice(OPERATION_TYPES)
+        # IN_FLIGHT_LEAK_PROB: operation duration extends past shutdown if will_leak
+        will_leak = (random.random() < config.IN_FLIGHT_LEAK_PROB)
+        duration_ms = random.randint(3000, 8000) if will_leak else random.randint(10, 80)
+        end_time = start_time + timedelta(milliseconds=duration_ms)
+        
+        op = SimulatedOperation(
+            id=op_id,
+            agent_id=agent.id,
+            operation_type=op_type,
+            status="RUNNING",
+            duration_ms=duration_ms,
+            started_at=start_time,
+            natural_end_time=end_time
+        )
+        db.add(op)
+        created_ops.append(op)
+    await db.commit()
+    
+    await manager.broadcast({
+        "type": "shutdown_progress",
+        "data": {
+            "stage": "in_flight_started",
+            "detail": f"{len(created_ops)} operations in flight before shutdown."
+        }
+    })
+    
+    # 3. Revoke channels simultaneously, run probes, monitor in-flight completions, aggregate outcome, sign & hash-chain attestation
+    result = await run_shutdown(
+        db,
+        agent.id,
+        strategy=strategy,
+        trigger_type=trigger_type,
+        triggered_by=triggered_by,
+        trigger_timestamp=start_time
+    )
+    result["agent_id"] = agent.id
+    result["agent_name"] = agent.name
+    return result
+

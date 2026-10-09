@@ -25,6 +25,8 @@ class ShutdownEvent(Base):
     agent_id           = Column(String, ForeignKey("agents.id"))
     strategy           = Column(String, nullable=False)      
     trigger_type       = Column(String, nullable=False)      
+    triggered_by       = Column(String, default="manual")
+    trigger_timestamp  = Column(DateTime, default=utcnow)
     started_at         = Column(DateTime, nullable=False)
     finished_at        = Column(DateTime, nullable=True)
     final_state        = Column(String, nullable=True)       

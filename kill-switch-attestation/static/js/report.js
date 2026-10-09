@@ -3,12 +3,25 @@ static/js/report.js
 */
 
 window.render_report = async function(container) {
-    container.innerHTML = `<h2>Shutdown Report</h2><div class="form-group">
-        <label>Enter Shutdown Event ID:</label>
-        <input type="text" id="report-id" placeholder="Event ID">
-        <button onclick="loadReport()">Load Report</button>
-    </div>
-    <div id="report-content"></div>`;
+    container.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2>Shutdown Report</h2>
+        </div>
+        <div class="panel">
+            <div class="form-group">
+                <label>Enter Shutdown Event ID:</label>
+                <div style="display:flex; gap:10px;">
+                    <input type="text" id="report-id" placeholder="Event ID" value="${State.latestShutdownId || ''}">
+                    <button onclick="loadReport()">Load Report</button>
+                </div>
+            </div>
+        </div>
+        <div id="report-content"></div>
+    `;
+    
+    if (State.latestShutdownId) {
+        loadReport();
+    }
 };
 
 window.loadReport = async function() {

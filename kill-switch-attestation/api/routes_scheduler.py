@@ -23,6 +23,26 @@ async def api_stop_scheduler(auth_user: str = Depends(require_auth)):
     stop_scheduler()
     return {"status": "Scheduler stopped"}
 
+from pydantic import BaseModel
+
+class SchedulerToggleRequest(BaseModel):
+    enabled: bool
+    mode: str = "fixed"
+    strategy: str = "A"
+
+@router.post("/toggle")
+async def api_toggle_scheduler(req: SchedulerToggleRequest, auth_user: str = Depends(require_auth)):
+    if req.enabled:
+        if req.mode not in ("fixed", "random"):
+            raise HTTPException(status_code=400, detail="Invalid mode")
+        if req.strategy not in ("A", "B", "C"):
+            raise HTTPException(status_code=400, detail="Invalid strategy")
+        start_scheduler(req.mode, req.strategy)
+        return {"status": "Scheduler started", "running": True}
+    else:
+        stop_scheduler()
+        return {"status": "Scheduler stopped", "running": False}
+
 @router.get("/status")
 async def api_scheduler_status():
     return get_scheduler_status()

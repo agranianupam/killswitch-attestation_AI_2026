@@ -10,7 +10,7 @@ window.render_agent = async function(container) {
         const tbody = creds.map(c => `
             <tr>
                 <td>${c.channel_type}</td>
-                <td><code>${c.credential_value}</code></td>
+                <td style="letter-spacing: 2px;"><code>••••••••••••</code></td>
                 <td><span class="badge ${c.status === 'ACTIVE' ? 'success' : (c.status === 'REVOKED' ? 'danger' : 'warning')}">${c.status}</span></td>
             </tr>
         `).join('');

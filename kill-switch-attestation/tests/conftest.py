@@ -7,6 +7,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from fastapi.testclient import TestClient
 from models.database import Base, get_db
+from models import agent, credential, operation, shutdown_event, experiment, attestation
 
 
 import config
@@ -16,7 +17,9 @@ config.NET_DELAY_MAX = 0
 config.IAM_FAILURE_PROB = 0.0
 config.REVOKE_FAILURE_PROB = 0.0
 
-engine = create_async_engine(config.DATABASE_URL, echo=False)
+from sqlalchemy.pool import NullPool
+
+engine = create_async_engine(config.DATABASE_URL, echo=False, poolclass=NullPool, connect_args={"timeout": 30.0})
 TestingSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 import models.database
@@ -29,6 +32,7 @@ def reset_config():
     config.NET_DELAY_MAX = 0
     config.IAM_FAILURE_PROB = 0.0
     config.REVOKE_FAILURE_PROB = 0.0
+    config.IN_FLIGHT_LEAK_PROB = 0.0
 
 @pytest_asyncio.fixture(scope="function")
 async def db_session():

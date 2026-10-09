@@ -1,6 +1,4 @@
-"""
-static/index.html — SPA shell
-"""
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,7 +9,10 @@ static/index.html — SPA shell
 </head>
 <body class="dark-theme">
     <nav class="sidebar">
-        <h2>Kill-Switch</h2>
+        <div style="padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px;">
+            <h2 style="margin: 0; color: var(--neon-blue); letter-spacing: 2px;">KILL-SWITCH</h2>
+            <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; margin-top: 5px;">Attestation & Containment Platform</div>
+        </div>
         <ul>
             <li><a href="#" data-view="dashboard">Dashboard</a></li>
             <li><a href="#" data-view="agent">Agent Details</a></li>
@@ -21,17 +22,67 @@ static/index.html — SPA shell
             <li><a href="#" data-view="analytics">Analytics</a></li>
             <li><a href="#" data-view="audit">Audit Logs</a></li>
         </ul>
-        <div id="auth-section">
+        <div class="guidelines-box" style="margin-top: auto;">
+            <h4>Quick Guidelines</h4>
+            <ul>
+                <li><strong>Strategy A:</strong> Revokes API keys & IAM. In-flight ops continue.</li>
+                <li><strong>Strategy B:</strong> Revokes + blocks new ops.</li>
+                <li><strong>Strategy C:</strong> Hard stop. Everything cancelled immediately.</li>
+            </ul>
+        </div>
+        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border); font-size: 11px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <span>WebSocket</span>
+                <span id="ws-status" style="color:var(--danger)">● DISCONNECTED</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+                <span>Simulator</span>
+                <span id="sim-status" style="color:var(--text-muted)">--</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:6px; align-items:center;">
+                <span>Scheduler</span>
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="checkbox" id="scheduler-toggle" onchange="window.toggleScheduler && window.toggleScheduler(this.checked)">
+                    <span id="scheduler-status-text" style="color:var(--text-muted); font-size:11px; font-weight:bold;">OFF</span>
+                </label>
+            </div>
+        </div>
+        <div id="auth-section" style="margin-top: 15px;">
             <!-- Login or Logout button depending on state -->
         </div>
     </nav>
-    <main id="app-content">
-        <!-- Views injected here by app.js -->
-    </main>
+    <div style="flex-grow: 1; display: flex; flex-direction: column;">
+        <header style="background: rgba(18, 18, 20, 0.8); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; z-index: 10;">
+            <div>
+                <h3 id="header-title" style="margin:0; font-size: 18px; font-weight:600;">System Overview</h3>
+                <div id="header-desc" style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Monitor live telemetry and control access.</div>
+            </div>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <div id="header-clock" style="font-family: monospace; font-size: 14px; color: var(--neon-blue);"></div>
+                <div id="header-user" style="font-weight: 600; font-size: 14px; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 20px;">Guest</div>
+            </div>
+        </header>
+        <main id="app-content" style="flex-grow: 1; overflow-y: auto; padding: 30px;">
+            <!-- Views injected here by app.js -->
+        </main>
+    </div>
 
-    <!-- Modal template -->
-    <div id="modal" class="modal hidden">
-        <div class="modal-content" id="modal-content"></div>
+    <!-- Shutdown Confirmation Modal -->
+    <div id="shutdown-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2 style="color:var(--danger); border-bottom: 1px solid var(--danger); padding-bottom:10px;">Confirm Emergency Shutdown</h2>
+            <div style="margin: 20px 0;">
+                <p><strong>Agent:</strong> <span id="modal-agent-id">...</span></p>
+                <p><strong>Strategy:</strong> <span id="modal-strategy" style="color:var(--warning); font-weight:bold;">...</span></p>
+                <div class="guidelines-box" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);">
+                    <p style="color: #f87171; margin:0;">Warning: This is a critical administrative action. Depending on the strategy, running operations may be forcibly terminated.</p>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:15px;">
+                <button onclick="document.getElementById('shutdown-modal').classList.add('hidden')">CANCEL</button>
+                <button class="danger" id="modal-confirm-btn">CONFIRM SHUTDOWN</button>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts -->

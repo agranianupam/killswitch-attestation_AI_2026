@@ -25,22 +25,9 @@ from api.websocket import router as ws_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    
     await init_db()
-    
-    
     ensure_keys_exist()
-    
-    
-    async with AsyncSessionLocal() as db:
-        await seed_demo_agent(db)
-        
-    
-    start_operation_loop()
-    
     yield
-    
-    
     stop_operation_loop()
     stop_scheduler()
     

@@ -13,6 +13,22 @@ from services.export_service import export_signed_report
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])
 
+@router.get("/entries")
+async def get_attestation_entries(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(AttestationEntry).order_by(AttestationEntry.timestamp.desc()).limit(20))
+    entries = result.scalars().all()
+    return [
+        {
+            "id": e.id,
+            "entry_hash": e.entry_hash,
+            "prev_hash": e.prev_hash,
+            "signature": e.signature,
+            "shutdown_event_id": e.shutdown_event_id,
+            "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+            "payload_json": e.payload_json
+        } for e in entries
+    ]
+
 @router.get("/logs")
 async def get_audit_logs(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(100))
