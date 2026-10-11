@@ -21,7 +21,7 @@ async def test_agent_seeding(db_session):
     
     assert len(creds) == 4
     types = {c.channel_type for c in creds}
-    assert types == {"api_key", "session_token", "iam_role", "external_tool"}
+    assert types == {"api_key", "session_token", "iam_role", "network"}
     
     
     agent_2 = await seed_demo_agent(db_session)

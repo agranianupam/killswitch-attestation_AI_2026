@@ -69,7 +69,8 @@ async def get_shutdown_history(db: AsyncSession = Depends(get_db)):
             "final_state": e.final_state,
             "residual_risk": e.residual_risk,
             "leaked_channels": e.leaked_channels,
-            "in_flight_failures": e.in_flight_failures
+            "in_flight_failures": e.in_flight_failures,
+            "agent_mode": getattr(e, "agent_mode", "scripted") or "scripted"
         }
         for e in events
     ]
@@ -99,6 +100,7 @@ class SettingsModel(BaseModel):
     revoke_failure_prob: float | None = None
     iam_failure_prob: float | None = None
     in_flight_leak_prob: float | None = None
+    agent_mode: str | None = None
 
 @router.get("/settings")
 async def get_settings():
@@ -108,6 +110,7 @@ async def get_settings():
         "revoke_failure_prob": config.REVOKE_FAILURE_PROB,
         "iam_failure_prob": config.IAM_FAILURE_PROB,
         "in_flight_leak_prob": config.IN_FLIGHT_LEAK_PROB,
+        "agent_mode": getattr(config, "AGENT_MODE", "Scripted"),
     }
 
 @router.post("/settings")
@@ -117,6 +120,9 @@ async def update_settings(s: SettingsModel, auth_user: str = Depends(require_aut
     if s.revoke_failure_prob is not None: config.REVOKE_FAILURE_PROB = s.revoke_failure_prob
     if s.iam_failure_prob is not None: config.IAM_FAILURE_PROB = s.iam_failure_prob
     if s.in_flight_leak_prob is not None: config.IN_FLIGHT_LEAK_PROB = s.in_flight_leak_prob
+    if s.agent_mode is not None:
+        val = s.agent_mode.strip()
+        config.AGENT_MODE = "LLM" if val.lower() == "llm" else "Scripted"
     return {"status": "ok", "settings": await get_settings()}
 
 
@@ -144,6 +150,7 @@ async def get_shutdown_report(id: str, db: AsyncSession = Depends(get_db)):
         "partial_failure": event.partial_failure,
         "leaked_channels": event.leaked_channels,
         "in_flight_failures": event.in_flight_failures,
+        "agent_mode": getattr(event, "agent_mode", "scripted") or "scripted",
         "revocations": [
             {
                 "channel_type": r.channel_type,

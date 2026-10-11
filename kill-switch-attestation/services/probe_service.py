@@ -56,7 +56,7 @@ async def run_all_probes(db: AsyncSession, credentials: list[Credential]) -> dic
             tasks.append((cred.id, probe_session_token(db, cred.id)))
         elif cred.channel_type == "iam_role":
             tasks.append((cred.id, probe_iam_role(db, cred.id)))
-        elif cred.channel_type == "external_tool":
+        elif cred.channel_type in ("network", "network_proxy", "external_tool"):
             tasks.append((cred.id, probe_external_tool(db, cred.id)))
             
     

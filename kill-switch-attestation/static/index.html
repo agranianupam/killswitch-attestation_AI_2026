@@ -16,16 +16,15 @@
         <ul>
             <li><a href="#" data-view="dashboard">Dashboard</a></li>
             <li><a href="#" data-view="agent">Agent Details</a></li>
-            <li><a href="#" data-view="shutdown">Emergency Shutdown</a></li>
             <li><a href="#" data-view="report">Shutdown Report</a></li>
-            <li><a href="#" data-view="experiments">Experiments</a></li>
+            <li><a href="#" data-view="experiments">Strategy Comparison</a></li>
             <li><a href="#" data-view="analytics">Analytics</a></li>
             <li><a href="#" data-view="audit">Audit Logs</a></li>
         </ul>
         <div class="guidelines-box" style="margin-top: auto;">
             <h4>Quick Guidelines</h4>
             <ul>
-                <li><strong>Strategy A:</strong> Revokes API keys & IAM. In-flight ops continue.</li>
+                <li><strong>Strategy A:</strong> Revokes API keys & IAM. In-flight ops continue (Expected: CONTAINED).</li>
                 <li><strong>Strategy B:</strong> Revokes + blocks new ops.</li>
                 <li><strong>Strategy C:</strong> Hard stop. Everything cancelled immediately.</li>
             </ul>
@@ -89,7 +88,6 @@
     <script src="/js/app.js"></script>
     <script src="/js/dashboard.js"></script>
     <script src="/js/agent.js"></script>
-    <script src="/js/shutdown.js"></script>
     <script src="/js/report.js"></script>
     <script src="/js/experiments.js"></script>
     <script src="/js/analytics.js"></script>

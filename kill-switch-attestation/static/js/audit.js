@@ -28,7 +28,7 @@ async function loadAuditLogs() {
         
         tbody.innerHTML = logs.map(l => `
             <tr>
-                <td>${new Date(l.timestamp).toLocaleString()}</td>
+                <td>${formatLocalTime(l.timestamp)}</td>
                 <td><span class="badge ${l.actor === 'system' ? 'success' : 'warning'}">${l.actor}</span></td>
                 <td>${l.action}</td>
                 <td>${l.detail}</td>

@@ -112,17 +112,18 @@ async def get_analytics_summary(db: AsyncSession = Depends(get_db)):
         )
         sh = sh_res.scalar_one_or_none()
         ref_time = sh.finished_at or sh.started_at if sh else op.started_at
-        rel_ms = 0.0
-        if op.completed_at and ref_time:
-            rel_ms = (op.completed_at - ref_time).total_seconds() * 1000
-        elif op.natural_end_time and ref_time:
-            rel_ms = (op.natural_end_time - ref_time).total_seconds() * 1000
+        comp_time = op.completed_at or op.natural_end_time
+        if comp_time and ref_time:
+            rel_ms = (comp_time - ref_time).total_seconds() * 1000
+        
+        if rel_ms <= 0:
+            rel_ms = max(50.0, float(op.duration_ms) if op.duration_ms else 150.0)
             
         in_flight_leaks_timeline.append({
             "op_id": op.id[:8],
             "operation_type": op.operation_type,
-            "relative_ms": round(rel_ms, 2),
-            "timestamp": op.completed_at.isoformat() if op.completed_at else op.natural_end_time.isoformat() if op.natural_end_time else None
+            "relative_ms": round(rel_ms, 1),
+            "timestamp": comp_time.isoformat() if comp_time else None
         })
 
     # Legacy strategy breakdown

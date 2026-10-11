@@ -16,7 +16,7 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-CHANNEL_TYPES = ["api_key", "session_token", "iam_role", "external_tool"]
+CHANNEL_TYPES = ["api_key", "session_token", "iam_role", "network"]
 
 CREDENTIAL_STATUS = ["ACTIVE", "REVOKING", "REVOKED", "REVOCATION_FAILED", "EXPIRED"]
 

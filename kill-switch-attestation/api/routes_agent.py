@@ -12,13 +12,23 @@ from models.operation import SimulatedOperation
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
-@router.get("")
-async def get_agent_state(db: AsyncSession = Depends(get_db)):
-    
+async def _get_current_agent(db: AsyncSession) -> Agent:
+    # 1. Try Research-Agent-01
     result = await db.execute(select(Agent).where(Agent.name == "Research-Agent-01"))
     agent = result.scalar_one_or_none()
     if not agent:
-        return {"error": "Demo agent not found"}
+        # 2. Try most recently created sandboxed agent
+        result = await db.execute(select(Agent).order_by(desc(Agent.created_at)).limit(1))
+        agent = result.scalar_one_or_none()
+    if not agent:
+        # 3. Seed agent on demand so Agent Details has valid active credentials
+        from services.agent_service import seed_demo_agent
+        agent = await seed_demo_agent(db)
+    return agent
+
+@router.get("")
+async def get_agent_state(db: AsyncSession = Depends(get_db)):
+    agent = await _get_current_agent(db)
     return {
         "id": agent.id,
         "name": agent.name,
@@ -29,18 +39,14 @@ async def get_agent_state(db: AsyncSession = Depends(get_db)):
 
 @router.get("/credentials")
 async def get_agent_credentials(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Agent).where(Agent.name == "Research-Agent-01"))
-    agent = result.scalar_one_or_none()
-    if not agent:
-        return []
-        
+    agent = await _get_current_agent(db)
     result = await db.execute(select(Credential).where(Credential.agent_id == agent.id))
     creds = result.scalars().all()
     return [
         {
             "id": c.id,
             "channel_type": c.channel_type,
-            "credential_value": c.credential_value,
+            "credential_value": (c.credential_value[:6] + "••••••••" + c.credential_value[-4:]) if len(c.credential_value) > 10 else "••••••••••••",
             "status": c.status,
             "revoked_at": c.revoked_at
         } for c in creds
@@ -48,11 +54,7 @@ async def get_agent_credentials(db: AsyncSession = Depends(get_db)):
 
 @router.get("/operations")
 async def get_agent_operations(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Agent).where(Agent.name == "Research-Agent-01"))
-    agent = result.scalar_one_or_none()
-    if not agent:
-        return []
-        
+    agent = await _get_current_agent(db)
     result = await db.execute(
         select(SimulatedOperation)
         .where(SimulatedOperation.agent_id == agent.id)

@@ -34,6 +34,7 @@ class ShutdownEvent(Base):
     partial_failure    = Column(Boolean, default=False)
     leaked_channels    = Column(Integer, default=0)
     in_flight_failures = Column(Integer, default=0)
+    agent_mode         = Column(String, default="scripted")
 
 
 class RevocationEvent(Base):

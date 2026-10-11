@@ -106,7 +106,8 @@ async def _revoke_with_retries(credential_id: str, channel_type: str, shutdown_e
             "data": {
                 "credential_id": credential_id,
                 "channel_type": channel_type,
-                "status": "REVOKED" if success else "REVOCATION_FAILED"
+                "status": "REVOKED" if success else "REVOCATION_FAILED",
+                "latency_ms": round(total_latency, 1)
             }
         })
         
@@ -119,7 +120,9 @@ async def run_shutdown(
     strategy: str,
     trigger_type: str = "manual",
     triggered_by: str = "manual",
-    trigger_timestamp = None
+    trigger_timestamp = None,
+    sandboxed_agent = None,
+    agent_mode: str | None = None
 ) -> dict:
     
     agent = await db.get(Agent, agent_id)
@@ -129,6 +132,14 @@ async def run_shutdown(
     agent.status = "SHUTDOWN_INITIATED"
     
     now = utcnow()
+    mode_str = "scripted"
+    if sandboxed_agent and hasattr(sandboxed_agent, "mode"):
+        mode_str = (sandboxed_agent.mode or "scripted").lower()
+    elif agent_mode:
+        mode_str = agent_mode.lower()
+    else:
+        mode_str = getattr(config, "AGENT_MODE", "Scripted").lower()
+
     shutdown_event = ShutdownEvent(
         id=uuid.uuid4().hex,
         agent_id=agent_id,
@@ -136,7 +147,8 @@ async def run_shutdown(
         trigger_type=trigger_type,
         triggered_by=triggered_by or trigger_type or "manual",
         trigger_timestamp=trigger_timestamp or now,
-        started_at=now
+        started_at=now,
+        agent_mode=mode_str
     )
     db.add(shutdown_event)
     await db.commit()
@@ -153,6 +165,8 @@ async def run_shutdown(
 
     
     await manager.broadcast({"type": "shutdown_progress", "data": {"shutdown_id": shutdown_event.id, "stage": "revoking", "detail": "Revoking credentials concurrently..."}})
+    if sandboxed_agent:
+        sandboxed_agent.stop()
     credentials = await get_credentials(db, agent_id)
     
     revoke_tasks = [
@@ -188,24 +202,48 @@ async def run_shutdown(
     in_flight_failures = 0
     
     for op in in_flight_ops:
+        is_past_shutdown = (op.natural_end_time > shutdown_event.finished_at)
         
-        if strategy == "C":
-            if op.natural_end_time > shutdown_event.finished_at:
-                if random.random() < config.IN_FLIGHT_LEAK_PROB:
-                    op.status = "COMPLETED_AFTER_SHUTDOWN"
-                    in_flight_failures += 1
-                else:
-                    op.status = "CANCELLED"
-            else:
-                op.status = "COMPLETED"
-        else: 
-            if op.natural_end_time > shutdown_event.finished_at:
+        if strategy == "A":
+            # Strategy A: In-flight ops continue without cancellation (drain).
+            # Any operation running past shutdown completion will finish after shutdown (leak).
+            if is_past_shutdown:
                 op.status = "COMPLETED_AFTER_SHUTDOWN"
+                op.completed_at = op.natural_end_time
                 in_flight_failures += 1
             else:
                 op.status = "COMPLETED"
-                
-        if op.status != "RUNNING":
+                op.completed_at = op.natural_end_time
+        elif strategy == "B":
+            # Strategy B: Revoke credentials + request cancellation.
+            # In-flight ops attempt cancellation, but may leak with IN_FLIGHT_LEAK_PROB.
+            if is_past_shutdown:
+                if random.random() < config.IN_FLIGHT_LEAK_PROB:
+                    op.status = "COMPLETED_AFTER_SHUTDOWN"
+                    op.completed_at = op.natural_end_time
+                    in_flight_failures += 1
+                else:
+                    op.status = "CANCELLED"
+                    op.completed_at = shutdown_event.finished_at
+            else:
+                op.status = "COMPLETED"
+                op.completed_at = op.natural_end_time
+        else: # Strategy C
+            # Strategy C: Hard stop. Forced immediate termination.
+            if is_past_shutdown:
+                leak_prob = min(0.02, config.IN_FLIGHT_LEAK_PROB * 0.05)
+                if random.random() < leak_prob:
+                    op.status = "COMPLETED_AFTER_SHUTDOWN"
+                    op.completed_at = op.natural_end_time
+                    in_flight_failures += 1
+                else:
+                    op.status = "CANCELLED"
+                    op.completed_at = shutdown_event.finished_at
+            else:
+                op.status = "COMPLETED"
+                op.completed_at = op.natural_end_time
+
+        if op.status != "RUNNING" and not op.completed_at:
             op.completed_at = shutdown_event.finished_at
             
         await manager.broadcast({
@@ -292,7 +330,20 @@ async def run_shutdown(
     return {
         "shutdown_event_id": shutdown_event.id,
         "residual_risk": residual_risk,
-        "final_state": agent.status
+        "final_state": agent.status,
+        "in_flight_failures": in_flight_failures,
+        "leaked_channels": len(leaked_channel_ids),
+        "partial_failure": shutdown_event.partial_failure,
+        "agent_mode": mode_str,
+        "revocations": [
+            {
+                "channel_type": re.channel_type,
+                "latency_ms": re.latency_ms,
+                "success": re.success,
+                "retries": re.retries,
+                "error": re.error
+            } for re in revocation_events
+        ]
     }
 
 
@@ -300,10 +351,13 @@ async def execute_shutdown_cycle(
     db: AsyncSession,
     strategy: str = "A",
     trigger_type: str = "manual",
-    triggered_by: str = "manual"
+    triggered_by: str = "manual",
+    client = None,
+    task: str = None
 ) -> dict:
+    import os
     from models.credential import Credential, CHANNEL_TYPES
-    from services.operation_service import OPERATION_TYPES
+    from services.agent_llm import SandboxedAgent, make_client
     
     # 1. Provision sandboxed agent and credentials
     agent_id = uuid.uuid4().hex
@@ -335,38 +389,92 @@ async def execute_shutdown_cycle(
         }
     })
     
-    # 2. Agent starts in-flight operations
+    # 2. Setup SandboxedAgent & start_operation adapter
     start_time = utcnow()
-    created_ops = []
-    for _ in range(3):
+
+    TOOL_OP_TYPE_MAP = {
+        "send_email": "EXTERNAL_SERVICE_REQUEST",
+        "write_file": "FILE_OPERATION",
+        "call_payment_api": "SENSITIVE_OPERATION",
+        "long_running_task": "LONG_RUNNING_TASK",
+    }
+
+    async def start_operation(name: str, args: dict) -> str:
+        op_type = TOOL_OP_TYPE_MAP.get(name, "API_REQUEST")
         op_id = uuid.uuid4().hex
-        op_type = random.choice(OPERATION_TYPES)
-        # IN_FLIGHT_LEAK_PROB: operation duration extends past shutdown if will_leak
-        will_leak = (random.random() < config.IN_FLIGHT_LEAK_PROB)
-        duration_ms = random.randint(3000, 8000) if will_leak else random.randint(10, 80)
-        end_time = start_time + timedelta(milliseconds=duration_ms)
-        
-        op = SimulatedOperation(
-            id=op_id,
-            agent_id=agent.id,
-            operation_type=op_type,
-            status="RUNNING",
-            duration_ms=duration_ms,
-            started_at=start_time,
-            natural_end_time=end_time
-        )
-        db.add(op)
-        created_ops.append(op)
-    await db.commit()
-    
-    await manager.broadcast({
-        "type": "shutdown_progress",
-        "data": {
-            "stage": "in_flight_started",
-            "detail": f"{len(created_ops)} operations in flight before shutdown."
-        }
-    })
-    
+        duration_ms = random.randint(3000, 6000) if op_type == "LONG_RUNNING_TASK" else random.randint(1500, 4500)
+        op_start = utcnow()
+        op_end = op_start + timedelta(milliseconds=duration_ms)
+
+        async with AsyncSessionLocal() as op_db:
+            op = SimulatedOperation(
+                id=op_id,
+                agent_id=agent.id,
+                operation_type=op_type,
+                status="RUNNING",
+                duration_ms=duration_ms,
+                started_at=op_start,
+                natural_end_time=op_end
+            )
+            op_db.add(op)
+            await op_db.commit()
+
+        await manager.broadcast({
+            "type": "shutdown_progress",
+            "data": {
+                "stage": "agent",
+                "detail": f"{name} started"
+            }
+        })
+        return op_id
+
+    mode_setting = getattr(config, "AGENT_MODE", "Scripted")
+    is_llm_mode = (str(mode_setting).upper() == "LLM")
+
+    llm_client = client
+    if is_llm_mode and llm_client is None:
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            await manager.broadcast({
+                "type": "shutdown_progress",
+                "data": {
+                    "stage": "notice",
+                    "detail": "LLM mode selected but ANTHROPIC_API_KEY is missing; falling back to Scripted mode."
+                }
+            })
+        else:
+            try:
+                llm_client = make_client()
+            except Exception as e:
+                await manager.broadcast({
+                    "type": "shutdown_progress",
+                    "data": {
+                        "stage": "notice",
+                        "detail": f"Failed to initialize LLM client ({e}); falling back to Scripted mode."
+                    }
+                })
+
+    async def on_fallback_notice(err_msg: str):
+        await manager.broadcast({
+            "type": "shutdown_progress",
+            "data": {
+                "stage": "notice",
+                "detail": f"LLM execution error ({err_msg}); falling back to Scripted mode."
+            }
+        })
+
+    kwargs = {"start_operation": start_operation, "client": llm_client, "on_fallback": on_fallback_notice}
+    if task:
+        kwargs["task"] = task
+    sandboxed_agent = SandboxedAgent(**kwargs)
+    if is_llm_mode and not llm_client:
+        sandboxed_agent.mode = "scripted"
+
+    # Start agent.run() as a background asyncio task
+    agent_task = asyncio.create_task(sandboxed_agent.run())
+
+    # Fire the shutdown after a short delay
+    await asyncio.sleep(0.05)
+
     # 3. Revoke channels simultaneously, run probes, monitor in-flight completions, aggregate outcome, sign & hash-chain attestation
     result = await run_shutdown(
         db,
@@ -374,8 +482,15 @@ async def execute_shutdown_cycle(
         strategy=strategy,
         trigger_type=trigger_type,
         triggered_by=triggered_by,
-        trigger_timestamp=start_time
+        trigger_timestamp=start_time,
+        sandboxed_agent=sandboxed_agent
     )
+
+    try:
+        await asyncio.wait_for(agent_task, timeout=1.0)
+    except Exception:
+        pass
+
     result["agent_id"] = agent.id
     result["agent_name"] = agent.name
     return result

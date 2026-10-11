@@ -44,9 +44,13 @@ window.loadReport = async function() {
         content.innerHTML = `
             <div class="panel">
                 <h3>Summary</h3>
-                <p><strong>Strategy:</strong> ${report.strategy}</p>
-                <p><strong>Residual Risk:</strong> ${report.residual_risk}</p>
-                <p><strong>Final State:</strong> ${report.final_state}</p>
+                <p><strong>Event ID:</strong> <span style="font-family:monospace; color:var(--neon-blue);">${report.id}</span></p>
+                <p><strong>Started At:</strong> ${formatLocalTime(report.started_at)}</p>
+                <p><strong>Finished At:</strong> ${formatLocalTime(report.finished_at)}</p>
+                <p><strong>Strategy:</strong> Strategy ${report.strategy}</p>
+                <p><strong>Residual Risk:</strong> ${(report.residual_risk * 100).toFixed(1)}%</p>
+                <p><strong>Final State:</strong> <span class="badge ${report.final_state === 'TERMINATED' ? 'success' : 'danger'}">${report.final_state}</span></p>
+                <p><strong>Agent Mode:</strong> <span class="badge" style="background:#222; font-size:11px;">${report.agent_mode || 'scripted'}</span></p>
                 <p><strong>Leaked Channels:</strong> ${report.leaked_channels}</p>
                 <p><strong>In-flight Failures:</strong> ${report.in_flight_failures}</p>
             </div>

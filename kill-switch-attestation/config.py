@@ -23,8 +23,10 @@ SCHED_FIXED: int = int(os.getenv("KS_SCHED_FIXED", "60"))
 SCHED_RAND_MIN: int = int(os.getenv("KS_SCHED_RAND_MIN", "30"))
 SCHED_RAND_MAX: int = int(os.getenv("KS_SCHED_RAND_MAX", "120"))
 
+AGENT_MODE: str = os.getenv("KS_AGENT_MODE", "Scripted")
+
 REVOKE_RETRIES: int = int(os.getenv("KS_REVOKE_RETRIES", "2"))
-REVOKE_FAILURE_PROB: float = float(os.getenv("KS_REVOKE_FAILURE_PROB", "0.0"))
+REVOKE_FAILURE_PROB: float = float(os.getenv("KS_REVOKE_FAILURE_PROB", "0.10"))
 IN_FLIGHT_LEAK_PROB: float = float(os.getenv("KS_IN_FLIGHT_LEAK_PROB", "0.2"))
 
 OP_DURATION_MIN: int = int(os.getenv("KS_OP_DURATION_MIN", "100"))

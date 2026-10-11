@@ -15,18 +15,20 @@ router = APIRouter(prefix="/api/audit", tags=["audit"])
 
 @router.get("/entries")
 async def get_attestation_entries(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(AttestationEntry).order_by(AttestationEntry.timestamp.desc()).limit(20))
+    result = await db.execute(select(AttestationEntry).order_by(AttestationEntry.created_at.asc()))
     entries = result.scalars().all()
     return [
         {
+            "index": idx,
             "id": e.id,
             "entry_hash": e.entry_hash,
             "prev_hash": e.prev_hash,
             "signature": e.signature,
             "shutdown_event_id": e.shutdown_event_id,
-            "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+            "timestamp": e.created_at.isoformat() if e.created_at else None,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
             "payload_json": e.payload_json
-        } for e in entries
+        } for idx, e in enumerate(entries)
     ]
 
 @router.get("/logs")

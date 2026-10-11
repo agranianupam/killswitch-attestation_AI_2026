@@ -3,6 +3,7 @@ main.py — Lifespan, routers, static mount
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -42,7 +43,8 @@ app.include_router(audit_router)
 app.include_router(analytics_router)
 app.include_router(ws_router)
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn

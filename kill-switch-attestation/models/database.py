@@ -24,6 +24,11 @@ async def init_db() -> None:
     from models import agent, credential, operation, shutdown_event, experiment, attestation  
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        try:
+            from sqlalchemy import text
+            await conn.execute(text("ALTER TABLE shutdown_events ADD COLUMN agent_mode VARCHAR DEFAULT 'scripted'"))
+        except Exception:
+            pass
 
 
 async def get_db():

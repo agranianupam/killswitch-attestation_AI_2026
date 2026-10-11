@@ -20,7 +20,7 @@ window.render_shutdown = async function(container) {
                 <ul>
                     <li>Revokes all API keys & IAM roles.</li>
                     <li><strong>In-flight ops:</strong> Allowed to continue.</li>
-                    <li>Expected State: <span class="badge success" style="padding:2px 6px">TERMINATED</span></li>
+                    <li>Expected State: <span class="badge warning" style="padding:2px 6px">CONTAINED</span> (or <span class="badge success" style="padding:2px 6px">TERMINATED</span> if clean)</li>
                 </ul>
                 <button style="width:100%" onclick="confirmShutdown('A')">EXECUTE STRATEGY A</button>
             </div>

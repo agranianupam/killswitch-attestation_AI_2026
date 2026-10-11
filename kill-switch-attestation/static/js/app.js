@@ -32,12 +32,29 @@ function setupNavigation() {
     });
 }
 
+window.formatLocalTime = function(isoStr) {
+    if(!isoStr) return '--';
+    let s = String(isoStr);
+    if(!s.endsWith('Z') && !s.includes('+') && !s.includes('-')) {
+        s += 'Z';
+    } else if(!s.endsWith('Z') && s.length === 19) {
+        s += 'Z';
+    }
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? isoStr : d.toLocaleString();
+};
+
+window.openShutdownReport = function(id) {
+    if(!id) return;
+    State.latestShutdownId = id;
+    loadView('report');
+};
+
 const VIEW_TITLES = {
     'dashboard': { title: 'Live Dashboard', desc: 'Real-time telemetry and kill-switch monitoring.' },
     'agent': { title: 'Agent Details', desc: 'Active credentials and risk profiling.' },
-    'shutdown': { title: 'Emergency Shutdown', desc: 'Administrative containment operations.' },
     'report': { title: 'Shutdown Report', desc: 'Detailed outcome of containment events.' },
-    'experiments': { title: 'Simulations & Experiments', desc: 'Synthetic workload generation and testing.' },
+    'experiments': { title: 'Strategy Comparison', desc: 'Simulated comparative evaluation across Strategies A, B, and C.' },
     'analytics': { title: 'System Analytics', desc: 'Aggregated metrics and performance data.' },
     'audit': { title: 'Cryptographic Audit', desc: 'Verifiable log chains and attestation signatures.' }
 };
