@@ -1,84 +1,97 @@
-"""
-services/scheduler_service.py — FR-7: APScheduler fixed/random
-"""
-
 import asyncio
-import random
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.triggers.date import DateTrigger
-from datetime import datetime, timedelta
+import math
+from datetime import datetime, timezone, timedelta
 import config
 from models.database import AsyncSessionLocal
-from services.orchestrator import run_shutdown
+from services.quota_service import is_daily_budget_reached
+from api.websocket import manager
 
-scheduler = AsyncIOScheduler()
+_running = False
 _current_mode = None
 _current_strategy = None
-_job_id = "shutdown_job"
+_next_fire_time = None
+_scheduler_task = None
+_cycle_lock = asyncio.Lock()
 
-async def _scheduled_task():
-    
-    try:
-        async with AsyncSessionLocal() as db:
-            
-            from services.agent_service import get_agent_by_name
-            agent = await get_agent_by_name(db, "Research-Agent-01")
-            
-            if agent and agent.status == "ACTIVE":
-                
-                from models.attestation import AuditLog
-                import uuid
-                log = AuditLog(
-                    id=uuid.uuid4().hex,
-                    actor="scheduler",
-                    action="SCHEDULED_SHUTDOWN_TRIGGERED",
-                    detail=f"Mode: {_current_mode}, Strategy: {_current_strategy}"
-                )
-                db.add(log)
-                await db.commit()
-                
-                await run_shutdown(db, agent.id, _current_strategy, _current_mode)
-                
-        
-        if _current_mode == "random":
-            delay = random.randint(config.SCHED_RAND_MIN, config.SCHED_RAND_MAX)
-            run_date = datetime.now() + timedelta(seconds=delay)
-            scheduler.add_job(_scheduled_task, DateTrigger(run_date=run_date), id=_job_id, replace_existing=True)
-            
-    except Exception as e:
-        print(f"Error in scheduled task: {e}")
+def draw_gap(mode: str) -> float:
+    rng = config.get_rng()
+    if mode == "heavy_tailed":
+        min_log = math.log(config.SCHED_MIN_SECONDS)
+        max_log = math.log(config.SCHED_MAX_SECONDS)
+        return math.exp(rng.uniform(min_log, max_log))
+    return rng.expovariate(1.0 / config.SCHED_MEAN_SECONDS)
+
+async def _scheduler_loop():
+    global _running, _next_fire_time
+    while _running:
+        gap = draw_gap(_current_mode)
+        now = datetime.now(timezone.utc)
+        _next_fire_time = now + timedelta(seconds=gap)
+
+        await manager.broadcast({
+            "type": "scheduler_update",
+            "data": {
+                "running": True,
+                "mode": _current_mode,
+                "strategy": _current_strategy,
+                "next_fire_time": _next_fire_time.isoformat(),
+                "gap_seconds": round(gap, 2)
+            }
+        })
+
+        try:
+            await asyncio.sleep(gap)
+        except asyncio.CancelledError:
+            break
+
+        if not _running:
+            break
+
+        if is_daily_budget_reached():
+            stop_scheduler()
+            await manager.broadcast({
+                "type": "quota_exceeded",
+                "data": {"message": "LLM daily budget reached; scheduler paused"}
+            })
+            break
+
+        async with _cycle_lock:
+            if not _running:
+                break
+            try:
+                from services.orchestrator import execute_shutdown_cycle
+                async with AsyncSessionLocal() as db:
+                    await execute_shutdown_cycle(
+                        db,
+                        strategy=_current_strategy,
+                        trigger_type="scheduler",
+                        triggered_by="scheduler"
+                    )
+            except Exception as exc:
+                print(f"[scheduler] error executing cycle: {exc}")
 
 def start_scheduler(mode: str, strategy: str):
-    global _current_mode, _current_strategy
-    _current_mode = mode
-    _current_strategy = strategy
-    
-    if not scheduler.running:
-        scheduler.start()
-        
-    if mode == "fixed":
-        scheduler.add_job(_scheduled_task, IntervalTrigger(seconds=config.SCHED_FIXED), id=_job_id, replace_existing=True)
-    elif mode == "random":
-        delay = random.randint(config.SCHED_RAND_MIN, config.SCHED_RAND_MAX)
-        run_date = datetime.now() + timedelta(seconds=delay)
-        scheduler.add_job(_scheduled_task, DateTrigger(run_date=run_date), id=_job_id, replace_existing=True)
-        
+    global _running, _current_mode, _current_strategy, _scheduler_task
+    stop_scheduler()
+    _current_mode = mode if mode in ("poisson", "heavy_tailed") else "poisson"
+    _current_strategy = strategy if strategy in ("A", "B", "C") else "A"
+    _running = True
+    _scheduler_task = asyncio.create_task(_scheduler_loop())
+
 def stop_scheduler():
-    global _current_mode, _current_strategy
-    if scheduler.get_job(_job_id):
-        scheduler.remove_job(_job_id)
+    global _running, _current_mode, _current_strategy, _next_fire_time, _scheduler_task
+    _running = False
+    if _scheduler_task and not _scheduler_task.done():
+        _scheduler_task.cancel()
+    _scheduler_task = None
     _current_mode = None
     _current_strategy = None
-    
+    _next_fire_time = None
+
 def get_scheduler_status():
-    job = scheduler.get_job(_job_id)
-    running = job is not None
-    next_fire = job.next_run_time.isoformat() if job and job.next_run_time else None
-    
     return {
-        "running": running,
+        "running": _running,
         "mode": _current_mode,
         "strategy": _current_strategy,
-        "next_fire_time": next_fire
+        "next_fire_time": _next_fire_time.isoformat() if _next_fire_time else None
     }

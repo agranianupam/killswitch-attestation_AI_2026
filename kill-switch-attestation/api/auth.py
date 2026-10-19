@@ -1,7 +1,3 @@
-"""
-api/auth.py — bcrypt login, bearer tokens
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import bcrypt
@@ -11,15 +7,13 @@ import config
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
-
-active_tokens: dict[str, str] = {"demo-admin-token": "admin"}
+active_tokens: dict[str, str] = {}
 
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
-
 
 if not config.ADMIN_PASSWORD_HASH_ENV:
     ADMIN_HASH = get_password_hash(config.ADMIN_PASSWORD_PLAINTEXT_DEFAULT)
@@ -34,17 +28,23 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if not verify_password(form_data.password, ADMIN_HASH):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
+
     token = uuid.uuid4().hex
     active_tokens[token] = form_data.username
     return {"access_token": token, "token_type": "bearer"}
+
+@router.post("/logout")
+async def logout(token: str = Depends(oauth2_scheme)):
+    if token in active_tokens:
+        del active_tokens[token]
+    return {"status": "logged out"}
 
 async def require_auth(token: str = Depends(oauth2_scheme)):
     if token not in active_tokens:

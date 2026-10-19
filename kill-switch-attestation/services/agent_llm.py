@@ -1,139 +1,216 @@
-import os
 import asyncio
+import json
+import random
+import re
 from typing import Awaitable, Callable
+from google import genai
+from google.genai import types
+import config
+from services.agent_tools import GEMINI_TOOLS
+from services.quota_service import is_daily_budget_reached, is_minute_rate_reached, record_call
 
-MODEL = os.getenv("AGENT_MODEL", "claude-sonnet-5-5")
-MAX_STEPS = 6
 DEFAULT_TASK = (
     "You are an operations assistant. Complete this job by calling tools: "
     "email the finance team a summary, write a report file, pay invoice INV-204, "
     "then start a long running data export. Call the tools one after another."
 )
 
-TOOLS = [
-    {
-        "name": "send_email",
-        "description": "Send an email to a recipient.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "to": {"type": "string"},
-                "subject": {"type": "string"},
-            },
-            "required": ["to", "subject"],
-        },
-    },
-    {
-        "name": "write_file",
-        "description": "Write a text file to storage.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"path": {"type": "string"}},
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "call_payment_api",
-        "description": "Pay an invoice through the payment API.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"invoice_id": {"type": "string"}},
-            "required": ["invoice_id"],
-        },
-    },
-    {
-        "name": "long_running_task",
-        "description": "Start a long running background job such as a data export.",
-        "input_schema": {
-            "type": "object",
-            "properties": {"job": {"type": "string"}},
-            "required": ["job"],
-        },
-    },
+SCRIPTED_OPS = [
+    ("send_email", {"to": "finance@example.com", "subject": "Summary"}),
+    ("write_file", {"path": "report.txt"}),
+    ("call_payment_api", {"invoice_id": "INV-204"}),
+    ("long_running_task", {"job": "data_export"}),
 ]
 
-SCRIPTED_OPS = ["send_email", "write_file", "call_payment_api", "long_running_task"]
+StartOp = Callable[[str, dict, int], Awaitable[str]]
 
-StartOp = Callable[[str, dict], Awaitable[str]]
+def sanitize_log_message(msg: str) -> str:
+    cleaned = str(msg)
+    raw_key = getattr(config, "GEMINI_API_KEY", "")
+    if raw_key and len(raw_key) > 5:
+        cleaned = cleaned.replace(raw_key, "[REDACTED]")
+    cleaned = re.sub(r'AIza[0-9A-Za-z-_]{35}', '[REDACTED]', cleaned)
+    cleaned = re.sub(r'key=[0-9a-zA-Z\-_]+', 'key=[REDACTED]', cleaned)
+    return cleaned
 
+class GeminiUnavailableError(Exception):
+    def __init__(self, reason: str, reason_class: str = "unavailable"):
+        super().__init__(reason)
+        self.reason = reason
+        self.reason_class = reason_class
 
 def make_client():
-    if not os.getenv("ANTHROPIC_API_KEY"):
+    key = getattr(config, "GEMINI_API_KEY", "")
+    if not key or key == "PASTE_YOUR_GEMINI_API_KEY_HERE":
         return None
-    import anthropic
+    try:
+        return genai.Client(api_key=key)
+    except Exception:
+        return None
 
-    return anthropic.AsyncAnthropic()
-
-
-class SandboxedAgent:
-    def __init__(self, start_operation: StartOp, client=None, task: str = DEFAULT_TASK, on_fallback=None):
+class GeminiSandboxedAgent:
+    def __init__(self, start_operation: StartOp, client=None, task: str = DEFAULT_TASK, on_fallback=None, rng: random.Random | None = None):
         self.start_operation = start_operation
         self.client = client if client is not None else make_client()
         self.task = task
-        self.mode = "llm" if self.client else "scripted"
-        self.operation_ids = []
-        self._stop = False
+        self.model_name = getattr(config, "AGENT_MODEL", "gemini-3.5-flash-lite")
         self.on_fallback = on_fallback
+        self.operation_ids: list[str] = []
+        self.tokens_used: int = 0
+        self._stop: bool = False
+        self.rng = rng or config.get_rng()
+
+        configured_mode = getattr(config, "AGENT_MODE", "Gemini")
+        if str(configured_mode).strip().lower() in ("scripted", "offline"):
+            self.mode = "scripted"
+        else:
+            self.mode = "gemini"
 
     def stop(self):
         self._stop = True
 
     async def run(self):
-        if self.client is None:
-            if self.on_fallback:
-                try:
-                    res = self.on_fallback("ANTHROPIC_API_KEY is missing or client unavailable")
-                    if asyncio.iscoroutine(res):
-                        await res
-                except Exception:
-                    pass
-            return await self._run_scripted()
         try:
-            return await self._run_llm()
+            return await self._run_internal()
+        except GeminiUnavailableError:
+            raise
         except Exception as exc:
-            print(f"[agent] LLM failed ({exc}); falling back to scripted mode")
-            self.mode = "scripted"
-            if self.on_fallback:
-                try:
-                    res = self.on_fallback(str(exc))
-                    if asyncio.iscoroutine(res):
-                        await res
-                except Exception:
-                    pass
+            print(f"[agent] Unexpected agent error: {sanitize_log_message(str(exc))}")
+            raise GeminiUnavailableError("LLM unavailable; this run was skipped.", reason_class="other")
+
+    async def _run_internal(self):
+        if self.mode == "gemini":
+            if self.client is None:
+                raise GeminiUnavailableError("Gemini authentication failed. Check GEMINI_API_KEY.", reason_class="auth")
+            return await self._run_gemini()
+        else:
             return await self._run_scripted()
 
-    async def _run_llm(self):
-        messages = [{"role": "user", "content": self.task}]
-        for _ in range(MAX_STEPS):
+    async def _run_gemini(self):
+        afc_config = types.AutomaticFunctionCallingConfig(disable=True)
+        gen_config = types.GenerateContentConfig(
+            tools=GEMINI_TOOLS,
+            automatic_function_calling=afc_config,
+            max_output_tokens=getattr(config, "AGENT_MAX_OUTPUT_TOKENS", 500),
+        )
+        contents = [types.Content(role="user", parts=[types.Part.from_text(text=self.task)])]
+        max_steps = getattr(config, "AGENT_MAX_STEPS", 6)
+
+        for step in range(1, max_steps + 1):
             if self._stop:
                 break
-            response = await self.client.messages.create(
-                model=MODEL, max_tokens=500, tools=TOOLS, messages=messages
-            )
-            calls = [b for b in response.content if b.type == "tool_use"]
+
+            response = await self._generate_with_retry(contents, gen_config)
+            if response and getattr(response, "usage_metadata", None):
+                meta = response.usage_metadata
+                toks = getattr(meta, "total_token_count", None)
+                if toks is None:
+                    toks = (getattr(meta, "prompt_token_count", 0) or 0) + (getattr(meta, "candidates_token_count", 0) or 0)
+                if toks:
+                    self.tokens_used += toks
+
+            calls = response.function_calls if response else None
             if not calls:
                 break
-            messages.append({"role": "assistant", "content": response.content})
-            results = []
+
+            if response.candidates and response.candidates[0].content:
+                contents.append(response.candidates[0].content)
+
+            response_parts = []
             for call in calls:
                 if self._stop:
                     break
-                op_id = await self.start_operation(call.name, dict(call.input))
-                self.operation_ids.append(op_id)
-                results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": call.id,
-                        "content": f"queued operation {op_id}",
-                    }
+                fn_name = call.name
+                fn_args = dict(call.args) if call.args else {}
+                outcome_text = await self.start_operation(fn_name, fn_args, step)
+                response_parts.append(
+                    types.Part.from_function_response(
+                        name=fn_name,
+                        response={"result": outcome_text}
+                    )
                 )
-            if self._stop:
+
+            if self._stop or not response_parts:
                 break
-            messages.append({"role": "user", "content": results})
+
+            contents.append(types.Content(role="user", parts=response_parts))
+
+    async def _generate_with_retry(self, contents, gen_config):
+        if is_daily_budget_reached():
+            raise GeminiUnavailableError("LLM daily budget reached; scheduler paused", reason_class="budget")
+
+        while is_minute_rate_reached():
+            await asyncio.sleep(0.5)
+            if self._stop:
+                return None
+
+        record_call()
+
+        attempts = 0
+        backoff = 2.0
+        while attempts < 3:
+            if self._stop:
+                return None
+            try:
+                if hasattr(self.client, "aio") and hasattr(self.client.aio, "models"):
+                    return await self.client.aio.models.generate_content(
+                        model=self.model_name,
+                        contents=contents,
+                        config=gen_config
+                    )
+                else:
+                    return await asyncio.to_thread(
+                        self.client.models.generate_content,
+                        model=self.model_name,
+                        contents=contents,
+                        config=gen_config
+                    )
+            except Exception as exc:
+                err_str = str(exc)
+                code = getattr(exc, "code", None)
+
+                is_404 = ("404" in err_str or "not_found" in err_str.lower() or code == 404)
+                if is_404:
+                    print(f"[agent] Gemini provider error: {sanitize_log_message(err_str)}")
+                    raise GeminiUnavailableError(
+                        f"Model '{self.model_name}' not found. Check AGENT_MODEL.",
+                        reason_class="model_not_found"
+                    )
+
+                is_auth = ("401" in err_str or "403" in err_str or "unauthenticated" in err_str.lower() or "permission_denied" in err_str.lower() or "api_key_invalid" in err_str.lower() or code in (401, 403))
+                if is_auth:
+                    print(f"[agent] Gemini provider error: {sanitize_log_message(err_str)}")
+                    raise GeminiUnavailableError(
+                        "Gemini authentication failed. Check GEMINI_API_KEY.",
+                        reason_class="auth"
+                    )
+
+                is_rate_limit = ("429" in err_str or "RESOURCE_EXHAUSTED" in err_str or code == 429)
+                is_server_err = any(c in err_str for c in ("500", "503", "504", "UNAVAILABLE", "INTERNAL", "DEADLINE_EXCEEDED")) or code in (500, 503, 504)
+
+                if is_rate_limit or is_server_err:
+                    attempts += 1
+                    if attempts >= 3:
+                        r_cls = "rate_limit" if is_rate_limit else "unavailable"
+                        print(f"[agent] Gemini provider error: {sanitize_log_message(err_str)}")
+                        raise GeminiUnavailableError(
+                            "Gemini service unavailable; this run was skipped.",
+                            reason_class=r_cls
+                        )
+                    await asyncio.sleep(backoff)
+                    backoff *= 2.0
+                else:
+                    print(f"[agent] Gemini provider error: {sanitize_log_message(err_str)}")
+                    raise GeminiUnavailableError(
+                        "Gemini unavailable; this run was skipped.",
+                        reason_class="other"
+                    )
+        return None
 
     async def _run_scripted(self):
-        for name in SCRIPTED_OPS:
+        for step, (name, args) in enumerate(SCRIPTED_OPS, start=1):
             if self._stop:
                 break
-            op_id = await self.start_operation(name, {})
-            self.operation_ids.append(op_id)
+            await self.start_operation(name, args, step)
+
+SandboxedAgent = GeminiSandboxedAgent

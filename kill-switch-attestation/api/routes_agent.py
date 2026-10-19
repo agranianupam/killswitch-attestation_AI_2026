@@ -1,7 +1,3 @@
-"""
-api/routes_agent.py
-"""
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
@@ -9,22 +5,31 @@ from models.database import get_db
 from models.agent import Agent
 from models.credential import Credential
 from models.operation import SimulatedOperation
+from services.quota_service import get_calls_today, is_budget_paused
+import config
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 async def _get_current_agent(db: AsyncSession) -> Agent:
-    # 1. Try Research-Agent-01
-    result = await db.execute(select(Agent).where(Agent.name == "Research-Agent-01"))
+    result = await db.execute(select(Agent).order_by(desc(Agent.created_at)).limit(1))
     agent = result.scalar_one_or_none()
     if not agent:
-        # 2. Try most recently created sandboxed agent
-        result = await db.execute(select(Agent).order_by(desc(Agent.created_at)).limit(1))
-        agent = result.scalar_one_or_none()
-    if not agent:
-        # 3. Seed agent on demand so Agent Details has valid active credentials
-        from services.agent_service import seed_demo_agent
-        agent = await seed_demo_agent(db)
+        from services.agent_service import provision_fresh_agent
+        agent = await provision_fresh_agent(db)
     return agent
+
+@router.get("/status")
+async def get_agent_status():
+    key = getattr(config, "GEMINI_API_KEY", "")
+    key_status = "configured" if (key and key != "PASTE_YOUR_GEMINI_API_KEY_HERE") else "missing"
+    return {
+        "key_status": key_status,
+        "model": getattr(config, "AGENT_MODEL", "gemini-3.5-flash-lite"),
+        "mode": getattr(config, "AGENT_MODE", "Gemini"),
+        "calls_used_today": get_calls_today(),
+        "max_calls_per_day": config.GEMINI_MAX_CALLS_PER_DAY,
+        "daily_budget_reached": is_budget_paused()
+    }
 
 @router.get("")
 async def get_agent_state(db: AsyncSession = Depends(get_db)):
@@ -59,16 +64,17 @@ async def get_agent_operations(db: AsyncSession = Depends(get_db)):
         select(SimulatedOperation)
         .where(SimulatedOperation.agent_id == agent.id)
         .order_by(desc(SimulatedOperation.started_at))
-        .limit(20)
+        .limit(50)
     )
     ops = result.scalars().all()
     return [
         {
-            "id": op.id,
-            "operation_type": op.operation_type,
-            "status": op.status,
-            "duration_ms": op.duration_ms,
-            "started_at": op.started_at,
-            "completed_at": op.completed_at
-        } for op in ops
+            "id": o.id,
+            "operation_type": o.operation_type,
+            "status": o.status,
+            "duration_ms": o.duration_ms,
+            "started_at": o.started_at,
+            "natural_end_time": o.natural_end_time,
+            "completed_at": o.completed_at
+        } for o in ops
     ]

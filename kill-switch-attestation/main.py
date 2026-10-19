@@ -1,15 +1,9 @@
-"""
-main.py — Lifespan, routers, static mount
-"""
-
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from models.database import init_db
-from models.database import AsyncSessionLocal
-from services.agent_service import seed_demo_agent
 from services.crypto_service import ensure_keys_exist
 from services.operation_service import start_operation_loop, stop_operation_loop
 from services.scheduler_service import stop_scheduler
@@ -23,7 +17,6 @@ from api.routes_audit import router as audit_router
 from api.routes_analytics import router as analytics_router
 from api.websocket import router as ws_router
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
@@ -31,7 +24,7 @@ async def lifespan(app: FastAPI):
     yield
     stop_operation_loop()
     stop_scheduler()
-    
+
 app = FastAPI(lifespan=lifespan, title="Kill-Switch Attestation System")
 
 app.include_router(auth_router)

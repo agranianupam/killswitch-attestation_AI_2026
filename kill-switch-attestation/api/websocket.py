@@ -1,7 +1,3 @@
-"""
-api/websocket.py — ConnectionManager, /ws
-"""
-
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
 
@@ -16,12 +12,12 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def broadcast(self, message: dict):
-        
         text_data = json.dumps(message)
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_text(text_data)
             except Exception:
@@ -30,11 +26,10 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 @router.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str | None = None):
     await manager.connect(websocket)
     try:
         while True:
-            
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)

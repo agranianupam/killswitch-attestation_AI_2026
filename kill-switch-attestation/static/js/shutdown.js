@@ -1,8 +1,6 @@
-/*
-static/js/shutdown.js
-*/
-
 window.render_shutdown = async function(container) {
+    window.cleanup_shutdown();
+
     container.innerHTML = `
         <div style="margin-bottom: 25px;">
             <h2 style="margin:0; font-size:32px; font-weight:800; color:var(--danger)">Emergency Shutdown Control</h2>
@@ -66,7 +64,7 @@ window.confirmShutdown = async function(strategy) {
         const agent = await apiCall('/api/agent');
         document.getElementById('modal-agent-id').textContent = `${agent.name} (${agent.id.substring(0,8)})`;
     } catch(e) {
-        document.getElementById('modal-agent-id').textContent = 'Research-Agent-01';
+        document.getElementById('modal-agent-id').textContent = 'Sandboxed-Agent';
     }
 
     const confirmBtn = document.getElementById('modal-confirm-btn');
@@ -108,3 +106,7 @@ function handleProgress(e) {
         }
     }
 }
+
+window.cleanup_shutdown = function() {
+    window.removeEventListener('ws_shutdown_progress', handleProgress);
+};

@@ -1,9 +1,5 @@
-/*
-static/js/app.js — Router, WS client, shared state
-*/
-
 const State = {
-    token: localStorage.getItem('ks_token') || null,
+    token: sessionStorage.getItem('ks_token') || null,
     currentView: 'dashboard',
     ws: null,
     latestShutdownId: null
@@ -14,8 +10,7 @@ function init() {
     setupWebSocket();
     renderAuth();
     loadView('dashboard');
-    
-    // Update clock every second
+
     setInterval(() => {
         const clock = document.getElementById('header-clock');
         if(clock) clock.textContent = new Date().toLocaleTimeString();
@@ -63,13 +58,13 @@ function loadView(view) {
     if(State.currentView && window[`cleanup_${State.currentView}`]) {
         window[`cleanup_${State.currentView}`]();
     }
-    
+
     State.currentView = view;
     document.querySelectorAll('.sidebar a').forEach(link => {
         if(link.getAttribute('data-view') === view) link.classList.add('active');
         else link.classList.remove('active');
     });
-    
+
     const titleObj = VIEW_TITLES[view] || { title: 'Overview', desc: '' };
     const hTitle = document.getElementById('header-title');
     const hDesc = document.getElementById('header-desc');
@@ -88,8 +83,9 @@ function loadView(view) {
 
 function setupWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    State.ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    
+    const tokenQuery = State.token ? `?token=${encodeURIComponent(State.token)}` : '';
+    State.ws = new WebSocket(`${protocol}//${window.location.host}/ws${tokenQuery}`);
+
     State.ws.onopen = () => {
         const badge = document.getElementById('ws-status');
         if (badge) {
@@ -101,24 +97,23 @@ function setupWebSocket() {
     State.ws.onmessage = (event) => {
         const msg = JSON.parse(event.data);
         const eventName = `ws_${msg.type}`;
-        // dispatch custom event
         window.dispatchEvent(new CustomEvent(eventName, { detail: msg.data }));
     };
-    
+
     State.ws.onclose = () => {
         const badge = document.getElementById('ws-status');
         if (badge) {
             badge.innerHTML = '● DISCONNECTED';
             badge.style.color = 'var(--danger)';
         }
-        setTimeout(setupWebSocket, 2000); // reconnect
+        setTimeout(setupWebSocket, 2000);
     };
 }
 
 async function apiCall(endpoint, method = 'GET', body = null) {
     const headers = { 'Content-Type': 'application/json' };
     if (State.token) headers['Authorization'] = `Bearer ${State.token}`;
-    
+
     const options = { method, headers };
     if (body) {
         if (body instanceof URLSearchParams) {
@@ -128,9 +123,9 @@ async function apiCall(endpoint, method = 'GET', body = null) {
             options.body = JSON.stringify(body);
         }
     }
-    
+
     const res = await fetch(endpoint, options);
-    if (res.status === 401) {
+    if (res.status === 401 && endpoint !== '/api/auth/login') {
         logout();
         throw new Error('Unauthorized');
     }
@@ -140,60 +135,92 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 function renderAuth() {
     const section = document.getElementById('auth-section');
     const headerUser = document.getElementById('header-user');
-    
-    // Hardcode for admin demonstration per user feedback
-    State.token = 'demo-admin-token';
-    
-    if (section) {
-        section.innerHTML = `<button style="width:100%" class="secondary" disabled>Authenticated as Admin</button>`;
-    }
-    if (headerUser) {
-        headerUser.textContent = 'Administrator';
-        headerUser.style.color = 'var(--success)';
+
+    if (State.token) {
+        if (section) {
+            section.innerHTML = `
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div style="font-size:11px; color:var(--success); font-weight:bold;">Authenticated as Admin</div>
+                    <button type="button" style="width:100%; padding:6px; font-size:11px;" class="secondary" onclick="logout()">Log Out</button>
+                </div>
+            `;
+        }
+        if (headerUser) {
+            headerUser.textContent = 'Administrator';
+            headerUser.style.color = 'var(--success)';
+        }
+    } else {
+        if (section) {
+            section.innerHTML = `<button type="button" style="width:100%; padding:8px;" onclick="showLogin()">Admin Login</button>`;
+        }
+        if (headerUser) {
+            headerUser.textContent = 'Guest';
+            headerUser.style.color = 'var(--text-muted)';
+        }
     }
 }
 
 function showLogin() {
-    const modal = document.getElementById('modal');
-    const content = document.getElementById('modal-content');
-    content.innerHTML = `
-        <h3>Admin Login</h3>
-        <div class="form-group">
-            <label>Username</label>
-            <input type="text" id="login-user" value="admin">
-        </div>
-        <div class="form-group">
-            <label>Password</label>
-            <input type="password" id="login-pass" value="admin">
-        </div>
-        <button onclick="doLogin()">Login</button>
-        <button class="secondary" onclick="document.getElementById('modal').classList.add('hidden')">Cancel</button>
-    `;
-    modal.classList.remove('hidden');
-}
-
-async function doLogin() {
-    const user = document.getElementById('login-user').value;
-    const pass = document.getElementById('login-pass').value;
-    const params = new URLSearchParams();
-    params.append('username', user);
-    params.append('password', pass);
-    
-    try {
-        const res = await apiCall('/api/auth/login', 'POST', params);
-        State.token = res.access_token;
-        localStorage.setItem('ks_token', State.token);
-        document.getElementById('modal').classList.add('hidden');
-        renderAuth();
-    } catch (e) {
-        alert('Login failed');
+    const modal = document.getElementById('login-modal');
+    if (modal) {
+        const errEl = document.getElementById('login-error');
+        if (errEl) {
+            errEl.style.display = 'none';
+            errEl.textContent = '';
+        }
+        modal.classList.remove('hidden');
     }
 }
 
-function logout() {
+function closeLoginModal() {
+    const modal = document.getElementById('login-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function doLogin() {
+    const userEl = document.getElementById('login-user');
+    const passEl = document.getElementById('login-pass');
+    const errEl = document.getElementById('login-error');
+    const user = userEl ? userEl.value : '';
+    const pass = passEl ? passEl.value : '';
+
+    const params = new URLSearchParams();
+    params.append('username', user);
+    params.append('password', pass);
+
+    try {
+        const res = await apiCall('/api/auth/login', 'POST', params);
+        State.token = res.access_token;
+        sessionStorage.setItem('ks_token', State.token);
+        closeLoginModal();
+        renderAuth();
+        if (State.ws) {
+            State.ws.close();
+        }
+        setupWebSocket();
+    } catch (e) {
+        if (errEl) {
+            errEl.textContent = 'Invalid username or password.';
+            errEl.style.display = 'block';
+        }
+    }
+}
+
+async function logout() {
+    if (State.token) {
+        try {
+            await apiCall('/api/auth/logout', 'POST');
+        } catch (e) {
+        }
+    }
     State.token = null;
-    localStorage.removeItem('ks_token');
+    sessionStorage.removeItem('ks_token');
     renderAuth();
+    if (State.ws) {
+        State.ws.close();
+    }
+    setupWebSocket();
+    showLogin();
 }
 
 window.onload = init;

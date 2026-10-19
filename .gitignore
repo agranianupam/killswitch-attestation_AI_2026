@@ -1,9 +1,9 @@
-# Keys & Secrets
 keys/
 *.pem
 *.key
 .env
 .env.*
+sandbox_tmp/
 
 # Databases & local state
 *.db

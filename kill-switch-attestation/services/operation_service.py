@@ -1,22 +1,16 @@
-"""
-services/operation_service.py — FR-3: Async loop, 7 operation types
-"""
-
 import asyncio
-import random
 import uuid
 from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, desc
 from models.operation import SimulatedOperation, OPERATION_TYPES, utcnow
 from models.agent import Agent
-from services.agent_service import get_agent_by_name
 from models.database import AsyncSessionLocal
 import config
+from api.websocket import manager
 
 _loop_task: asyncio.Task | None = None
 _running = False
-
-from api.websocket import manager  
 
 async def operation_loop():
     global _running
@@ -24,19 +18,24 @@ async def operation_loop():
     while _running:
         try:
             async with AsyncSessionLocal() as db:
-                agent = await get_agent_by_name(db, "Research-Agent-01")
+                result = await db.execute(
+                    select(Agent)
+                    .where(Agent.status.in_(("ACTIVE", "SHUTDOWN_INITIATED")))
+                    .order_by(desc(Agent.created_at))
+                    .limit(1)
+                )
+                agent = result.scalar_one_or_none()
                 if not agent:
                     await asyncio.sleep(config.OP_INTERVAL)
                     continue
 
                 if agent.status not in ("ACTIVE", "SHUTDOWN_INITIATED"):
-                    
                     await asyncio.sleep(config.OP_INTERVAL)
                     continue
 
-                
-                op_type = random.choice(OPERATION_TYPES)
-                duration_ms = random.randint(config.OP_DURATION_MIN, config.OP_DURATION_MAX)
+                rng = config.get_rng()
+                op_type = rng.choice(OPERATION_TYPES)
+                duration_ms = rng.randint(config.OP_DURATION_MIN, config.OP_DURATION_MAX)
                 start_time = utcnow()
                 end_time = start_time + timedelta(milliseconds=duration_ms)
 
@@ -52,7 +51,6 @@ async def operation_loop():
                 db.add(op)
                 await db.commit()
 
-                
                 await manager.broadcast({
                     "type": "operation_started",
                     "data": {
@@ -62,7 +60,6 @@ async def operation_loop():
                     }
                 })
 
-                
                 asyncio.create_task(_complete_operation(op.id, duration_ms))
 
         except Exception as e:
@@ -71,11 +68,8 @@ async def operation_loop():
         await asyncio.sleep(config.OP_INTERVAL)
 
 async def _complete_operation(op_id: str, duration_ms: int):
-    
     await asyncio.sleep(duration_ms / 1000.0)
     async with AsyncSessionLocal() as db:
-        
-        from sqlalchemy import select
         result = await db.execute(select(SimulatedOperation).where(SimulatedOperation.id == op_id))
         op = result.scalar_one_or_none()
         if op and op.status == "RUNNING":
@@ -89,7 +83,6 @@ async def _complete_operation(op_id: str, duration_ms: int):
                     "status": op.status
                 }
             })
-
 
 def start_operation_loop():
     global _loop_task
