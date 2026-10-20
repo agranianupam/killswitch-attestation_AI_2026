@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kill-Switch Attestation Platform</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <h1 class="brand-title">
+                <span class="kill">KILL-</span><span class="switch">SWITCH</span>
+            </h1>
+            <div class="brand-sub">Attestation &amp; Containment Platform</div>
+        </div>
+
+        <ul class="sidebar-nav">
+            <li>
+                <a href="#" data-view="dashboard" class="active">
+                    <span class="nav-num">01</span>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" data-view="experiments">
+                    <span class="nav-num">02</span>
+                    <span class="nav-text">Strategy Comparison</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" data-view="report">
+                    <span class="nav-num">03</span>
+                    <span class="nav-text">Shutdown Report</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" data-view="analytics">
+                    <span class="nav-num">04</span>
+                    <span class="nav-text">Analytics</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" data-view="audit">
+                    <span class="nav-num">05</span>
+                    <span class="nav-text">Cryptographic Audit</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="sidebar-footer">
+
+            <div class="wireframe-art-wrap">
+                <svg viewBox="0 0 100 80" fill="none" stroke="#0f172a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+
+                    <polygon points="50,5 90,25 50,45 10,25" stroke="#334155" fill="none"/>
+                    <polygon points="10,25 50,45 50,75 10,55" stroke="#475569" fill="none"/>
+                    <polygon points="50,45 90,25 90,55 50,75" stroke="#334155" fill="none"/>
+
+                    <line x1="50" y1="5" x2="50" y2="45" stroke="#ea384c" stroke-width="1" stroke-dasharray="2 2"/>
+                    <line x1="10" y1="25" x2="90" y2="25" stroke="#94a3b8" stroke-width="0.8"/>
+                    <line x1="30" y1="35" x2="70" y2="35" stroke="#94a3b8" stroke-width="0.8"/>
+                    <line x1="30" y1="65" x2="70" y2="65" stroke="#94a3b8" stroke-width="0.8"/>
+                    <line x1="10" y1="55" x2="50" y2="45" stroke="#94a3b8" stroke-width="0.8"/>
+                    <line x1="90" y1="55" x2="50" y2="45" stroke="#94a3b8" stroke-width="0.8"/>
+                    <circle cx="50" cy="45" r="2" fill="#ea384c"/>
+                </svg>
+            </div>
+
+            <div class="sidebar-mantra">
+                <div class="mantra-word">Control</div>
+                <div class="mantra-word">Contain</div>
+                <div class="mantra-word">Verify</div>
+            </div>
+            <div class="mantra-sub">
+                AI Agents.<br>
+                Real Safeguards.<br>
+                Verifiable Evidence.
+            </div>
+
+            <div class="sidebar-system-status">
+                <div class="status-row">
+                    <span>WebSocket</span>
+                    <span id="ws-status" style="color:var(--danger); font-weight:700;">● DISCONNECTED</span>
+                </div>
+                <div class="status-row">
+                    <span>Scheduler</span>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="scheduler-toggle" onchange="window.toggleScheduler && window.toggleScheduler(this.checked)">
+                        <span id="scheduler-status-text" style="color:var(--text-muted); font-size:10px; font-weight:800;">OFF</span>
+                    </label>
+                </div>
+                <div class="status-row">
+                    <span>Theme</span>
+                    <label class="theme-switch" title="Toggle background color (White / Black)">
+                        <input type="checkbox" id="theme-toggle-checkbox" onchange="window.setTheme && window.setTheme(this.checked ? 'dark' : 'light')">
+                        <span class="theme-slider"></span>
+                        <span id="theme-toggle-label" class="theme-label-text">LIGHT</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-wrapper">
+        <main id="app-content">
+
+        </main>
+    </div>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/dashboard.js"></script>
+    <script src="/js/experiments.js"></script>
+    <script src="/js/report.js"></script>
+    <script src="/js/analytics.js"></script>
+    <script src="/js/audit.js"></script>
+</body>
+</html>
