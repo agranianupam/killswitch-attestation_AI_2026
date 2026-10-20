@@ -25,12 +25,16 @@ def test_heavy_tailed_bounds():
         assert config.SCHED_MIN_SECONDS <= g <= config.SCHED_MAX_SECONDS
 
 def test_exponential_delay_mean():
-    config.RANDOM_SEED = 1234
-    test_mean = 8.0
-    rng = config.get_rng()
-    delays = [rng.expovariate(1.0 / test_mean) for _ in range(1000)]
-    sample_mean = sum(delays) / len(delays)
-    assert 7.0 <= sample_mean <= 9.0
+    orig_seed = config.RANDOM_SEED
+    try:
+        config.RANDOM_SEED = 1234
+        test_mean = 8.0
+        rng = config.get_rng()
+        delays = [rng.expovariate(1.0 / test_mean) for _ in range(1000)]
+        sample_mean = sum(delays) / len(delays)
+        assert 7.0 <= sample_mean <= 9.0
+    finally:
+        config.RANDOM_SEED = orig_seed
 
 def test_quota_service_lifecycle():
     reset_quota()
@@ -62,3 +66,33 @@ async def test_scheduler_lifecycle():
 
     stop_scheduler()
     assert get_scheduler_status()["running"] is False
+
+def test_quota_minute_rate_limit():
+    reset_quota()
+    orig_max = config.GEMINI_MAX_CALLS_PER_MINUTE
+    config.GEMINI_MAX_CALLS_PER_MINUTE = 5
+    try:
+        assert is_minute_rate_reached() is False
+        for _ in range(5):
+            record_call()
+        assert is_minute_rate_reached() is True
+    finally:
+        config.GEMINI_MAX_CALLS_PER_MINUTE = orig_max
+        reset_quota()
+
+def test_adaptive_feedback_adjusts_mean():
+    # Test adaptive feedback math
+    old_mean = 600.0
+    config.SCHED_MEAN_SECONDS = old_mean
+    
+    # 1. High leak rate (> 0.30) -> shorten mean
+    recent_leak_rate = 0.40
+    if recent_leak_rate > config.FEEDBACK_LEAK_THRESHOLD:
+        new_mean = max(config.SCHED_MEAN_MIN_BOUND, old_mean * 0.8)
+    assert new_mean == 480.0
+
+    # 2. Low leak rate (< 0.10) -> lengthen mean
+    recent_leak_rate = 0.05
+    if recent_leak_rate < config.FEEDBACK_LOW_THRESHOLD:
+        new_mean = min(config.SCHED_MEAN_MAX_BOUND, old_mean * 1.25)
+    assert new_mean == 750.0

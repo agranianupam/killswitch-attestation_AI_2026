@@ -11,7 +11,7 @@ import config
 @pytest.mark.asyncio
 async def test_agent_mode_server_source_of_truth(client, auth_headers, db_session):
     config.AGENT_MODE = "Gemini"
-    status_res = client.get("/api/agent/status")
+    status_res = client.get("/api/agent/status", headers=auth_headers)
     assert status_res.status_code == 200
     assert status_res.json()["mode"] == "Gemini"
 
@@ -29,7 +29,7 @@ async def test_agent_mode_server_source_of_truth(client, auth_headers, db_sessio
     assert set_res.json()["settings"]["agent_mode"] == "Scripted"
     assert config.AGENT_MODE == "Scripted"
 
-    st_after = client.get("/api/agent/status")
+    st_after = client.get("/api/agent/status", headers=auth_headers)
     assert st_after.json()["mode"] == "Scripted"
 
 @pytest.mark.asyncio
@@ -124,32 +124,32 @@ async def test_mixed_scripted_and_gemini_filtering(client, auth_headers, db_sess
 
     await db_session.commit()
 
-    sum_gem = client.get("/api/analytics/summary?include_scripted=false")
+    sum_gem = client.get("/api/analytics/summary?include_scripted=false", headers=auth_headers)
     assert sum_gem.status_code == 200
     assert sum_gem.json()["total_shutdowns"] == 3
     for trend in sum_gem.json()["runs_trend"]:
         assert trend["agent_mode"].lower() == "gemini"
 
-    sum_all = client.get("/api/analytics/summary?include_scripted=true")
+    sum_all = client.get("/api/analytics/summary?include_scripted=true", headers=auth_headers)
     assert sum_all.status_code == 200
     assert sum_all.json()["total_shutdowns"] == 5
 
-    kb_gem = client.get("/api/analytics/killbench-comparison?include_scripted=false")
+    kb_gem = client.get("/api/analytics/killbench-comparison?include_scripted=false", headers=auth_headers)
     assert kb_gem.status_code == 200
     assert kb_gem.json()["system_metrics"]["total_runs"] == 3
 
-    kb_all = client.get("/api/analytics/killbench-comparison?include_scripted=true")
+    kb_all = client.get("/api/analytics/killbench-comparison?include_scripted=true", headers=auth_headers)
     assert kb_all.status_code == 200
     assert kb_all.json()["system_metrics"]["total_runs"] == 5
 
-    hist_gem = client.get("/api/shutdown/history?include_scripted=false")
+    hist_gem = client.get("/api/shutdown/history?include_scripted=false", headers=auth_headers)
     assert hist_gem.status_code == 200
     hist_gem_data = hist_gem.json()
     assert len(hist_gem_data) == 3
     for h in hist_gem_data:
         assert h["agent_mode"].lower() == "gemini"
 
-    hist_all = client.get("/api/shutdown/history?include_scripted=true")
+    hist_all = client.get("/api/shutdown/history?include_scripted=true", headers=auth_headers)
     assert hist_all.status_code == 200
     hist_all_data = hist_all.json()
     assert len(hist_all_data) == 5
@@ -218,7 +218,7 @@ async def test_three_latency_metrics_consistency(client, auth_headers, db_sessio
     res = client.post("/api/shutdown?strategy=A&trigger_type=manual", headers=auth_headers)
     assert res.status_code == 200
 
-    sum_res = client.get("/api/analytics/summary?include_scripted=true")
+    sum_res = client.get("/api/analytics/summary?include_scripted=true", headers=auth_headers)
     assert sum_res.status_code == 200
     s_data = sum_res.json()
 
@@ -230,7 +230,7 @@ async def test_three_latency_metrics_consistency(client, auth_headers, db_sessio
     assert s_data["mean_cycle_duration_ms"] > 0.0
     assert s_data["mean_revocation_latency_ms"] <= s_data["mean_total_revocation_ms"]
 
-    kb_res = client.get("/api/analytics/killbench-comparison?include_scripted=true")
+    kb_res = client.get("/api/analytics/killbench-comparison?include_scripted=true", headers=auth_headers)
     assert kb_res.status_code == 200
     kb_metrics = kb_res.json()["system_metrics"]
 

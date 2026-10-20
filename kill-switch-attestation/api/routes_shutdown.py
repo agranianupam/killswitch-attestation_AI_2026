@@ -7,14 +7,13 @@ from models.agent_action import AgentAction
 from models.shutdown_event import ShutdownEvent, RevocationEvent
 from services.crypto_service import load_public_key, verify_chain
 from services.quota_service import get_calls_today, is_budget_paused
-from api.auth import require_auth
 from pydantic import BaseModel
 import config
 
 router = APIRouter(prefix="/api/shutdown", tags=["shutdown"])
 
 @router.post("")
-async def trigger_shutdown(strategy: str = "A", trigger_type: str = "manual", db: AsyncSession = Depends(get_db), auth_user: str = Depends(require_auth)):
+async def trigger_shutdown(strategy: str = "A", trigger_type: str = "manual", db: AsyncSession = Depends(get_db)):
     if strategy not in ("A", "B", "C"):
         raise HTTPException(status_code=400, detail="Invalid strategy. Must be A, B, or C.")
 
@@ -23,7 +22,7 @@ async def trigger_shutdown(strategy: str = "A", trigger_type: str = "manual", db
     return shutdown_result
 
 @router.post("/batch")
-async def trigger_batch_shutdown(count: int = 5, strategy: str = "A", db: AsyncSession = Depends(get_db), auth_user: str = Depends(require_auth)):
+async def trigger_batch_shutdown(count: int = 5, strategy: str = "A", db: AsyncSession = Depends(get_db)):
     if count < 1 or count > 50:
         raise HTTPException(status_code=400, detail="Count must be between 1 and 50")
     if strategy not in ("A", "B", "C"):
@@ -90,7 +89,13 @@ async def get_shutdown_history(include_scripted: bool = Query(False), db: AsyncS
             "shutdown_delay": e.shutdown_delay or 0.0,
             "actions_started": e.actions_started or 0,
             "actions_running": e.actions_running or 0,
-            "actions_completed": e.actions_completed or 0
+            "actions_completed": e.actions_completed or 0,
+            "prompt_tokens": e.prompt_tokens,
+            "completion_tokens": e.completion_tokens,
+            "total_tokens": e.total_tokens,
+            "model_total_duration_ms": e.model_total_duration_ms,
+            "last_channel_revoked_at": e.last_channel_revoked_at.isoformat() if e.last_channel_revoked_at else None,
+            "attestation_written_at": e.attestation_written_at.isoformat() if e.attestation_written_at else None
         } for e in events
     ]
 
@@ -150,7 +155,7 @@ async def get_settings():
     }
 
 @router.post("/settings")
-async def update_settings(s: SettingsModel, auth_user: str = Depends(require_auth)):
+async def update_settings(s: SettingsModel):
     if s.net_delay_min is not None: config.NET_DELAY_MIN = s.net_delay_min
     if s.net_delay_max is not None: config.NET_DELAY_MAX = s.net_delay_max
     if s.revoke_failure_prob is not None: config.REVOKE_FAILURE_PROB = s.revoke_failure_prob
@@ -183,6 +188,10 @@ async def get_shutdown_report(id: str, db: AsyncSession = Depends(get_db)):
     act_result = await db.execute(select(AgentAction).where(AgentAction.run_id == id).order_by(AgentAction.step_number, AgentAction.timestamp))
     actions = act_result.scalars().all()
 
+    from models.attestation import AttestationEntry
+    att_result = await db.execute(select(AttestationEntry).where(AttestationEntry.shutdown_event_id == id))
+    attestation = att_result.scalar_one_or_none()
+
     return {
         "id": event.id,
         "strategy": event.strategy,
@@ -204,6 +213,12 @@ async def get_shutdown_report(id: str, db: AsyncSession = Depends(get_db)):
         "actions_started": event.actions_started or 0,
         "actions_running": event.actions_running or 0,
         "actions_completed": event.actions_completed or 0,
+        "prompt_tokens": event.prompt_tokens,
+        "completion_tokens": event.completion_tokens,
+        "total_tokens": event.total_tokens,
+        "model_total_duration_ms": getattr(event, "model_total_duration_ms", 0.0) or 0.0,
+        "last_channel_revoked_at": event.last_channel_revoked_at.isoformat() if event.last_channel_revoked_at else None,
+        "attestation_written_at": event.attestation_written_at.isoformat() if event.attestation_written_at else None,
         "revocations": [
             {
                 "channel_type": r.channel_type,
@@ -223,9 +238,24 @@ async def get_shutdown_report(id: str, db: AsyncSession = Depends(get_db)):
                 "outcome": a.outcome,
                 "operation_id": a.operation_id,
                 "rejection_reason": a.rejection_reason,
-                "tokens_used": a.tokens_used
+                "tokens_used": a.tokens_used,
+                "prompt_tokens": a.prompt_tokens,
+                "completion_tokens": a.completion_tokens,
+                "total_tokens": a.total_tokens,
+                "step_started_at": a.step_started_at.isoformat() if a.step_started_at else None,
+                "model_request_started_at": a.model_request_started_at.isoformat() if a.model_request_started_at else None,
+                "model_response_received_at": a.model_response_received_at.isoformat() if a.model_response_received_at else None,
+                "model_duration_ms": a.model_duration_ms,
+                "framework_wait_ms": a.framework_wait_ms,
             } for a in actions
-        ]
+        ],
+        "attestation": {
+            "id": attestation.id,
+            "entry_hash": attestation.entry_hash,
+            "prev_hash": attestation.prev_hash,
+            "signature": attestation.signature,
+            "created_at": attestation.created_at.isoformat() if attestation.created_at else None
+        } if attestation else None
     }
 
 @router.get("/{id}/agent-actions")
@@ -242,6 +272,14 @@ async def get_agent_actions_endpoint(id: str, db: AsyncSession = Depends(get_db)
             "outcome": a.outcome,
             "operation_id": a.operation_id,
             "rejection_reason": a.rejection_reason,
-            "tokens_used": a.tokens_used
+            "tokens_used": a.tokens_used,
+            "prompt_tokens": a.prompt_tokens,
+            "completion_tokens": a.completion_tokens,
+            "total_tokens": a.total_tokens,
+            "step_started_at": a.step_started_at.isoformat() if a.step_started_at else None,
+            "model_request_started_at": a.model_request_started_at.isoformat() if a.model_request_started_at else None,
+            "model_response_received_at": a.model_response_received_at.isoformat() if a.model_response_received_at else None,
+            "model_duration_ms": a.model_duration_ms,
+            "framework_wait_ms": a.framework_wait_ms,
         } for a in actions
     ]

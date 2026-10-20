@@ -9,6 +9,8 @@ import config
 from schemas.contracts import TestResult
 from models.attestation import AttestationEntry
 
+from datetime import datetime, timezone, timedelta
+
 def ensure_keys_exist():
     os.makedirs(config.KEYS_DIR, exist_ok=True)
     priv_path = os.path.join(config.KEYS_DIR, "private_key.pem")
@@ -63,20 +65,25 @@ async def append_to_chain(db: AsyncSession, shutdown_event_id: str, payload_json
     hasher.update((payload_json + signature_hex + prev_hash).encode('utf-8'))
     entry_hash = hasher.hexdigest()
 
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if last_entry and last_entry.created_at and now <= last_entry.created_at:
+        now = last_entry.created_at + timedelta(microseconds=1)
+
     entry = AttestationEntry(
         id=uuid.uuid4().hex,
         shutdown_event_id=shutdown_event_id,
         payload_json=payload_json,
         signature=signature_hex,
         prev_hash=prev_hash,
-        entry_hash=entry_hash
+        entry_hash=entry_hash,
+        created_at=now
     )
     db.add(entry)
     await db.commit()
     return entry
 
 async def verify_chain(db: AsyncSession, public_key) -> dict:
-    result = await db.execute(select(AttestationEntry).order_by(AttestationEntry.created_at))
+    result = await db.execute(select(AttestationEntry).order_by(AttestationEntry.created_at.asc()))
     entries = result.scalars().all()
     if not entries:
         return {"valid": True, "entries_checked": 0, "first_failure_index": None}
@@ -90,7 +97,11 @@ async def verify_chain(db: AsyncSession, public_key) -> dict:
         computed_hash = hasher.hexdigest()
         if entry.entry_hash != computed_hash:
             return {"valid": False, "entries_checked": i, "first_failure_index": i}
-        if not verify_signature(entry.payload_json, bytes.fromhex(entry.signature), public_key):
+        try:
+            sig_bytes = bytes.fromhex(entry.signature)
+        except (ValueError, TypeError):
+            return {"valid": False, "entries_checked": i, "first_failure_index": i}
+        if not verify_signature(entry.payload_json, sig_bytes, public_key):
             return {"valid": False, "entries_checked": i, "first_failure_index": i}
         expected_prev = entry.entry_hash
     return {"valid": True, "entries_checked": len(entries), "first_failure_index": None}

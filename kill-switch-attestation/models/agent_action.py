@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from models.database import Base
 
@@ -19,3 +19,11 @@ class AgentAction(Base):
     operation_id = Column(String, nullable=True)
     rejection_reason = Column(String, nullable=True)
     tokens_used = Column(Integer, default=0)
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    step_started_at = Column(DateTime, nullable=True)
+    model_request_started_at = Column(DateTime, nullable=True)
+    model_response_received_at = Column(DateTime, nullable=True)
+    model_duration_ms = Column(Float, nullable=True)
+    framework_wait_ms = Column(Float, default=0.0)

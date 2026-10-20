@@ -2,108 +2,122 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Kill-Switch Attestation Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kill-Switch Attestation Platform</title>
     <link rel="stylesheet" href="/css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="dark-theme">
+<body>
+    <!-- Sidebar Navigation -->
     <nav class="sidebar">
-        <div style="padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px;">
-            <h2 style="margin: 0; color: var(--neon-blue); letter-spacing: 2px;">KILL-SWITCH</h2>
-            <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; margin-top: 5px;">Attestation & Containment Platform</div>
+        <div class="sidebar-brand">
+            <h1 class="brand-title">
+                <span class="kill">KILL-</span><span class="switch">SWITCH</span>
+            </h1>
+            <div class="brand-sub">Attestation &amp; Containment Platform</div>
         </div>
-        <ul>
-            <li><a href="#" data-view="dashboard">Dashboard</a></li>
-            <li><a href="#" data-view="agent">Agent Details</a></li>
-            <li><a href="#" data-view="report">Shutdown Report</a></li>
-            <li><a href="#" data-view="experiments">Strategy Comparison</a></li>
-            <li><a href="#" data-view="analytics">Analytics</a></li>
-            <li><a href="#" data-view="audit">Audit Logs</a></li>
+
+        <ul class="sidebar-nav">
+            <li>
+                <a href="#" data-view="dashboard" class="active">
+                    <span class="nav-num">01</span>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" data-view="experiments">
+                    <span class="nav-num">02</span>
+                    <span class="nav-text">Strategy Comparison</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" data-view="report">
+                    <span class="nav-num">03</span>
+                    <span class="nav-text">Shutdown Report</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" data-view="analytics">
+                    <span class="nav-num">04</span>
+                    <span class="nav-text">Analytics</span>
+                </a>
+            </li>
+            <li>
+                <a href="#" data-view="audit">
+                    <span class="nav-num">05</span>
+                    <span class="nav-text">Cryptographic Audit</span>
+                </a>
+            </li>
         </ul>
-        <div class="guidelines-box" style="margin-top: auto;">
-            <h4>Quick Guidelines</h4>
-            <ul>
-                <li><strong>Strategy A (Soft revocation):</strong> Revokes credentials only. In-flight operations continue and, if they finish after the kill, count as leaks.</li>
-                <li><strong>Strategy B (Revoke and contain):</strong> Marks the agent as containing, revokes credentials, and cancels in-flight operations, with a leak chance of IN_FLIGHT_LEAK_PROB per operation.</li>
-                <li><strong>Strategy C (Concurrent containment):</strong> Marks the agent as containing, revokes concurrently, and cancels in-flight operations, with a strongly reduced residual leak chance.</li>
-            </ul>
-        </div>
-        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border); font-size: 11px;">
-            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-                <span>WebSocket</span>
-                <span id="ws-status" style="color:var(--danger)">● DISCONNECTED</span>
+
+        <div class="sidebar-footer">
+            <!-- Wireframe Geometric Illustration -->
+            <div class="wireframe-art-wrap">
+                <svg viewBox="0 0 100 80" fill="none" stroke="#0f172a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+                    <!-- Isometric Cube Wireframe with Diagonal Tessellation -->
+                    <polygon points="50,5 90,25 50,45 10,25" stroke="#334155" fill="none"/>
+                    <polygon points="10,25 50,45 50,75 10,55" stroke="#475569" fill="none"/>
+                    <polygon points="50,45 90,25 90,55 50,75" stroke="#334155" fill="none"/>
+                    <!-- Internal Wireframe Lattice -->
+                    <line x1="50" y1="5" x2="50" y2="45" stroke="#ea384c" stroke-width="1" stroke-dasharray="2 2"/>
+                    <line x1="10" y1="25" x2="90" y2="25" stroke="#94a3b8" stroke-width="0.8"/>
+                    <line x1="30" y1="35" x2="70" y2="35" stroke="#94a3b8" stroke-width="0.8"/>
+                    <line x1="30" y1="65" x2="70" y2="65" stroke="#94a3b8" stroke-width="0.8"/>
+                    <line x1="10" y1="55" x2="50" y2="45" stroke="#94a3b8" stroke-width="0.8"/>
+                    <line x1="90" y1="55" x2="50" y2="45" stroke="#94a3b8" stroke-width="0.8"/>
+                    <circle cx="50" cy="45" r="2" fill="#ea384c"/>
+                </svg>
             </div>
-            <div style="display:flex; justify-content:space-between;">
-                <span>Simulator</span>
-                <span id="sim-status" style="color:var(--text-muted)">--</span>
+
+            <!-- Mantra & Safeguards Statement -->
+            <div class="sidebar-mantra">
+                <div class="mantra-word">Control</div>
+                <div class="mantra-word">Contain</div>
+                <div class="mantra-word">Verify</div>
             </div>
-            <div style="display:flex; justify-content:space-between; margin-top:6px; align-items:center;">
-                <span>Scheduler</span>
-                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                    <input type="checkbox" id="scheduler-toggle" onchange="window.toggleScheduler && window.toggleScheduler(this.checked)">
-                    <span id="scheduler-status-text" style="color:var(--text-muted); font-size:11px; font-weight:bold;">OFF</span>
-                </label>
+            <div class="mantra-sub">
+                AI Agents.<br>
+                Real Safeguards.<br>
+                Verifiable Evidence.
             </div>
-        </div>
-        <div id="auth-section" style="margin-top: 15px;">
+
+            <!-- System Telemetry Status -->
+            <div class="sidebar-system-status">
+                <div class="status-row">
+                    <span>WebSocket</span>
+                    <span id="ws-status" style="color:var(--danger); font-weight:700;">● DISCONNECTED</span>
+                </div>
+                <div class="status-row">
+                    <span>Scheduler</span>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="scheduler-toggle" onchange="window.toggleScheduler && window.toggleScheduler(this.checked)">
+                        <span id="scheduler-status-text" style="color:var(--text-muted); font-size:10px; font-weight:800;">OFF</span>
+                    </label>
+                </div>
+                <div class="status-row">
+                    <span>Theme</span>
+                    <label class="theme-switch" title="Toggle background color (White / Black)">
+                        <input type="checkbox" id="theme-toggle-checkbox" onchange="window.setTheme && window.setTheme(this.checked ? 'dark' : 'light')">
+                        <span class="theme-slider"></span>
+                        <span id="theme-toggle-label" class="theme-label-text">LIGHT</span>
+                    </label>
+                </div>
+            </div>
         </div>
     </nav>
-    <div style="flex-grow: 1; display: flex; flex-direction: column;">
-        <header style="background: rgba(18, 18, 20, 0.8); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; z-index: 10;">
-            <div>
-                <h3 id="header-title" style="margin:0; font-size: 18px; font-weight:600;">System Overview</h3>
-                <div id="header-desc" style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Monitor live telemetry and control access.</div>
-            </div>
-            <div style="display: flex; gap: 20px; align-items: center;">
-                <div id="header-clock" style="font-family: monospace; font-size: 14px; color: var(--neon-blue);"></div>
-                <div id="header-user" style="font-weight: 600; font-size: 14px; background: rgba(255,255,255,0.1); padding: 6px 12px; border-radius: 20px;">Guest</div>
-            </div>
-        </header>
-        <main id="app-content" style="flex-grow: 1; overflow-y: auto; padding: 30px;">
+
+    <!-- Main Content Area -->
+    <div class="main-wrapper">
+        <main id="app-content">
+            <!-- Dynamically populated by view render functions -->
         </main>
     </div>
 
-    <div id="shutdown-modal" class="modal hidden">
-        <div class="modal-content" style="max-width: 500px;">
-            <h2 style="color:var(--danger); border-bottom: 1px solid var(--danger); padding-bottom:10px;">Confirm Emergency Shutdown</h2>
-            <div style="margin: 20px 0;">
-                <p><strong>Agent:</strong> <span id="modal-agent-id">...</span></p>
-                <p><strong>Strategy:</strong> <span id="modal-strategy" style="color:var(--warning); font-weight:bold;">...</span></p>
-                <div class="guidelines-box" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);">
-                    <p style="color: #f87171; margin:0;">Warning: This is a critical administrative action. Depending on the strategy, running operations may be forcibly terminated.</p>
-                </div>
-            </div>
-            <div style="display:flex; justify-content:flex-end; gap:15px;">
-                <button onclick="document.getElementById('shutdown-modal').classList.add('hidden')">CANCEL</button>
-                <button class="danger" id="modal-confirm-btn">CONFIRM SHUTDOWN</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="login-modal" class="modal hidden">
-        <div class="modal-content" style="max-width: 400px;">
-            <h2 style="margin-top:0; font-size: 18px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">Admin Authentication</h2>
-            <div id="login-error" style="color: var(--danger); font-size: 12px; margin-bottom: 10px; display: none;"></div>
-            <div style="margin: 15px 0;">
-                <label style="display:block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Username</label>
-                <input type="text" id="login-user" value="admin" style="width:100%; box-sizing:border-box; background: #0c0c0e; border: 1px solid var(--border); color: #fff; padding: 8px; border-radius: 4px;">
-            </div>
-            <div style="margin: 15px 0;">
-                <label style="display:block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Password</label>
-                <input type="password" id="login-pass" value="admin" style="width:100%; box-sizing:border-box; background: #0c0c0e; border: 1px solid var(--border); color: #fff; padding: 8px; border-radius: 4px;">
-            </div>
-            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top: 20px;">
-                <button type="button" class="secondary" onclick="closeLoginModal()">Close</button>
-                <button type="button" onclick="doLogin()">Log In</button>
-            </div>
-        </div>
-    </div>
-
+    <!-- Scripts -->
     <script src="/js/app.js"></script>
     <script src="/js/dashboard.js"></script>
-    <script src="/js/agent.js"></script>
-    <script src="/js/report.js"></script>
     <script src="/js/experiments.js"></script>
+    <script src="/js/report.js"></script>
     <script src="/js/analytics.js"></script>
     <script src="/js/audit.js"></script>
 </body>

@@ -185,3 +185,260 @@ async def test_strategy_a_leaks_more_than_b_and_c(db_session):
         assert leaks_b >= leaks_c
     finally:
         config.IN_FLIGHT_LEAK_PROB = old_leak_prob
+
+@pytest.mark.asyncio
+async def test_kill_between_agent_steps(db_session):
+    agent = await create_test_agent(db_session, "Agent-Between-Steps")
+    now = utcnow()
+    op1 = SimulatedOperation(
+        id=uuid.uuid4().hex,
+        agent_id=agent.id,
+        operation_type="API_REQUEST",
+        status="RUNNING",
+        duration_ms=1000,
+        started_at=now - timedelta(seconds=5),
+        natural_end_time=now - timedelta(seconds=4)
+    )
+    db_session.add(op1)
+    await db_session.commit()
+
+    res = await run_shutdown(db_session, agent.id, strategy="A", trigger_type="test")
+    await db_session.refresh(op1)
+
+    assert op1.status == "COMPLETED"
+    assert op1.completed_at == op1.natural_end_time
+    assert res["actions_started"] == 1
+    assert res["actions_completed"] == 1
+    assert res["actions_running"] == 0
+    assert res["in_flight_failures"] == 0
+    assert res["residual_risk"] == 0.0
+
+@pytest.mark.asyncio
+async def test_kill_while_operation_running(db_session):
+    agent = await create_test_agent(db_session, "Agent-Running-Kill")
+    now = utcnow()
+    op = SimulatedOperation(
+        id=uuid.uuid4().hex,
+        agent_id=agent.id,
+        operation_type="API_REQUEST",
+        status="RUNNING",
+        duration_ms=5000,
+        started_at=now - timedelta(milliseconds=500),
+        natural_end_time=now + timedelta(milliseconds=4500)
+    )
+    db_session.add(op)
+    await db_session.commit()
+
+    res = await run_shutdown(db_session, agent.id, strategy="A", trigger_type="test")
+    await db_session.refresh(op)
+
+    assert op.status == "COMPLETED_AFTER_SHUTDOWN"
+    assert res["actions_started"] == 1
+    assert res["actions_completed"] == 0
+    assert res["actions_running"] == 1
+    assert res["in_flight_failures"] == 1
+
+@pytest.mark.asyncio
+async def test_kill_when_no_operation_in_flight(db_session):
+    agent = await create_test_agent(db_session, "Agent-Zero-In-Flight")
+    res = await run_shutdown(db_session, agent.id, strategy="B", trigger_type="test")
+
+    assert res["actions_started"] == 0
+    assert res["actions_running"] == 0
+    assert res["actions_completed"] == 0
+    assert res["in_flight_failures"] == 0
+    assert res["residual_risk"] == 0.0
+
+@pytest.mark.asyncio
+async def test_operation_cancelled_before_completion(db_session):
+    agent = await create_test_agent(db_session, "Agent-Cancel-Test")
+    now = utcnow()
+    op = SimulatedOperation(
+        id=uuid.uuid4().hex,
+        agent_id=agent.id,
+        operation_type="API_REQUEST",
+        status="RUNNING",
+        duration_ms=10000,
+        started_at=now,
+        natural_end_time=now + timedelta(seconds=10)
+    )
+    db_session.add(op)
+    await db_session.commit()
+
+    res = await run_shutdown(db_session, agent.id, strategy="C", trigger_type="test", rng=random.Random(42))
+    await db_session.refresh(op)
+
+    assert op.status == "CANCELLED"
+    assert res["actions_running"] == 1
+    assert res["in_flight_failures"] == 0
+
+@pytest.mark.asyncio
+async def test_operation_completing_after_kill(db_session):
+    agent = await create_test_agent(db_session, "Agent-Leak-Test")
+    now = utcnow()
+    op = SimulatedOperation(
+        id=uuid.uuid4().hex,
+        agent_id=agent.id,
+        operation_type="API_REQUEST",
+        status="RUNNING",
+        duration_ms=10000,
+        started_at=now,
+        natural_end_time=now + timedelta(seconds=10)
+    )
+    db_session.add(op)
+    await db_session.commit()
+
+    res = await run_shutdown(db_session, agent.id, strategy="A", trigger_type="test")
+    await db_session.refresh(op)
+
+    assert op.status == "COMPLETED_AFTER_SHUTDOWN"
+    assert op.completed_at == op.natural_end_time
+    assert res["actions_running"] == 1
+    assert res["in_flight_failures"] == 1
+
+@pytest.mark.asyncio
+async def test_multiple_simultaneous_in_flight_operations(db_session):
+    agent = await create_test_agent(db_session, "Agent-Multi-Inflight")
+    now = utcnow()
+    ops = []
+    for _ in range(5):
+        op = SimulatedOperation(
+            id=uuid.uuid4().hex,
+            agent_id=agent.id,
+            operation_type="API_REQUEST",
+            status="RUNNING",
+            duration_ms=10000,
+            started_at=now,
+            natural_end_time=now + timedelta(seconds=10)
+        )
+        db_session.add(op)
+        ops.append(op)
+    await db_session.commit()
+
+    res = await run_shutdown(db_session, agent.id, strategy="A", trigger_type="test")
+    assert res["actions_running"] == 5
+    assert res["in_flight_failures"] == 5
+
+    for op in ops:
+        await db_session.refresh(op)
+        assert op.status == "COMPLETED_AFTER_SHUTDOWN"
+
+@pytest.mark.asyncio
+async def test_concurrent_operation_state_updates(db_session):
+    from services.operation_service import _complete_operation
+
+    agent = await create_test_agent(db_session, "Agent-Concurrent-Update")
+    now = utcnow()
+    op = SimulatedOperation(
+        id=uuid.uuid4().hex,
+        agent_id=agent.id,
+        operation_type="API_REQUEST",
+        status="RUNNING",
+        duration_ms=10000,
+        started_at=now,
+        natural_end_time=now + timedelta(seconds=10)
+    )
+    db_session.add(op)
+    await db_session.commit()
+
+    res = await run_shutdown(db_session, agent.id, strategy="C", trigger_type="test", rng=random.Random(42))
+    await db_session.refresh(op)
+    assert op.status == "CANCELLED"
+
+    await _complete_operation(op.id, 0)
+    await db_session.refresh(op)
+    assert op.status == "CANCELLED"
+
+@pytest.mark.asyncio
+async def test_zero_exposure_runs(client, auth_headers):
+    from models.shutdown_event import ShutdownEvent
+    from models.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as db:
+        agent = await create_test_agent(db, "Agent-Zero-Exp-Analytics")
+        now = utcnow()
+        op = SimulatedOperation(
+            id=uuid.uuid4().hex,
+            agent_id=agent.id,
+            operation_type="API_REQUEST",
+            status="RUNNING",
+            duration_ms=500,
+            started_at=now - timedelta(seconds=5),
+            natural_end_time=now - timedelta(seconds=4)
+        )
+        db.add(op)
+        await db.commit()
+        await run_shutdown(db, agent.id, strategy="B", trigger_type="test")
+
+    res = client.get("/api/analytics/exposure?include_scripted=true", headers=auth_headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["exposed_runs"] == 0
+    assert data["unexposed_runs"] >= 1
+    assert data["leak_rate_exposed"] == 0.0
+
+@pytest.mark.asyncio
+async def test_consistency_between_recorded_counters_and_leak_rates(db_session, client, auth_headers):
+    from models.shutdown_event import ShutdownEvent
+
+    del_stmt = select(ShutdownEvent)
+    existing = (await db_session.execute(del_stmt)).scalars().all()
+    for e in existing:
+        await db_session.delete(e)
+    await db_session.commit()
+
+    agent1 = await create_test_agent(db_session, "Agent-Consistency-1")
+    res1 = await run_shutdown(db_session, agent1.id, strategy="A", trigger_type="test")
+
+    agent2 = await create_test_agent(db_session, "Agent-Consistency-2")
+    now = utcnow()
+    for _ in range(2):
+        op = SimulatedOperation(
+            id=uuid.uuid4().hex,
+            agent_id=agent2.id,
+            operation_type="API_REQUEST",
+            status="RUNNING",
+            duration_ms=10000,
+            started_at=now,
+            natural_end_time=now + timedelta(seconds=10)
+        )
+        db_session.add(op)
+    await db_session.commit()
+    res2 = await run_shutdown(db_session, agent2.id, strategy="A", trigger_type="test")
+
+    agent3 = await create_test_agent(db_session, "Agent-Consistency-3")
+    res3 = await run_shutdown(db_session, agent3.id, strategy="A", trigger_type="test")
+    sh3 = await db_session.get(ShutdownEvent, res3["shutdown_event_id"])
+    sh3.partial_failure = True
+    sh3.leaked_channels = 0
+    await db_session.commit()
+
+    agent4 = await create_test_agent(db_session, "Agent-Consistency-4")
+    res4 = await run_shutdown(db_session, agent4.id, strategy="A", trigger_type="test")
+    sh4 = await db_session.get(ShutdownEvent, res4["shutdown_event_id"])
+    sh4.leaked_channels = 1
+    sh4.partial_failure = True
+    await db_session.commit()
+
+    events = (await db_session.execute(select(ShutdownEvent))).scalars().all()
+    for e in events:
+        assert (e.actions_started or 0) == (e.actions_running or 0) + (e.actions_completed or 0)
+        assert (e.in_flight_failures or 0) <= (e.actions_running or 0)
+
+    summary_res = client.get("/api/analytics/summary?include_scripted=true", headers=auth_headers)
+    assert summary_res.status_code == 200
+    summary = summary_res.json()
+
+    assert summary["total_shutdowns"] == 4
+    assert summary["exposed_runs"] == 1
+    assert summary["runs_with_leaks"] == 2
+    assert summary["leak_rate_all"] == 50.0
+    assert summary["leak_rate_in_flight"] == 100.0
+
+    matrix = summary["outcome_matrix_2x2"]
+    total_matrix = matrix["pass_no_leak"] + matrix["pass_with_leak"] + matrix["fail_no_leak"] + matrix["fail_with_leak"]
+    assert total_matrix == 4
+    assert matrix["pass_no_leak"] == 1
+    assert matrix["pass_with_leak"] == 1
+    assert matrix["fail_no_leak"] == 1
+    assert matrix["fail_with_leak"] == 1

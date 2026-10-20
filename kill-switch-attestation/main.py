@@ -8,7 +8,6 @@ from services.crypto_service import ensure_keys_exist
 from services.operation_service import start_operation_loop, stop_operation_loop
 from services.scheduler_service import stop_scheduler
 
-from api.auth import router as auth_router
 from api.routes_agent import router as agent_router
 from api.routes_shutdown import router as shutdown_router
 from api.routes_scheduler import router as scheduler_router
@@ -27,7 +26,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, title="Kill-Switch Attestation System")
 
-app.include_router(auth_router)
 app.include_router(agent_router)
 app.include_router(shutdown_router)
 app.include_router(scheduler_router)
@@ -40,5 +38,8 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
 if __name__ == "__main__":
+    import os
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    host = os.getenv("KS_HOST", "127.0.0.1")
+    port = int(os.getenv("KS_PORT", "8000"))
+    uvicorn.run("main:app", host=host, port=port, reload=True)

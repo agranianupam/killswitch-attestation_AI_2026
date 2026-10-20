@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from api.auth import require_auth
 from services.scheduler_service import start_scheduler, stop_scheduler, get_scheduler_status
 
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
@@ -11,7 +10,7 @@ class SchedulerToggleRequest(BaseModel):
     strategy: str = "A"
 
 @router.post("/start")
-async def api_start_scheduler(mode: str, strategy: str, auth_user: str = Depends(require_auth)):
+async def api_start_scheduler(mode: str, strategy: str):
     if mode not in ("poisson", "heavy_tailed"):
         raise HTTPException(status_code=400, detail="Invalid mode. Must be poisson or heavy_tailed.")
     if strategy not in ("A", "B", "C"):
@@ -20,12 +19,12 @@ async def api_start_scheduler(mode: str, strategy: str, auth_user: str = Depends
     return {"status": "Scheduler started", "mode": mode, "strategy": strategy}
 
 @router.post("/stop")
-async def api_stop_scheduler(auth_user: str = Depends(require_auth)):
+async def api_stop_scheduler():
     stop_scheduler()
     return {"status": "Scheduler stopped"}
 
 @router.post("/toggle")
-async def api_toggle_scheduler(req: SchedulerToggleRequest, auth_user: str = Depends(require_auth)):
+async def api_toggle_scheduler(req: SchedulerToggleRequest):
     if req.enabled:
         if req.mode not in ("poisson", "heavy_tailed"):
             raise HTTPException(status_code=400, detail="Invalid mode. Must be poisson or heavy_tailed.")

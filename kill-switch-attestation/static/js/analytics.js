@@ -1,19 +1,18 @@
-let analyticsLeakChart = null;
 let analyticsGapsChart = null;
-let _analyticsIncludeScripted = false;
 
 window.render_analytics = async function(container) {
     container.innerHTML = `<h2>Analytics</h2><p>Loading analytics data...</p>`;
 
     try {
-        const qParam = _analyticsIncludeScripted ? '?include_scripted=true' : '?include_scripted=false';
-        const [summary, killbench, gapsData] = await Promise.all([
-            apiCall(`/api/analytics/summary${qParam}`),
-            apiCall(`/api/analytics/killbench-comparison${qParam}`),
-            apiCall(`/api/analytics/shutdown-gaps${qParam}`).catch(() => null)
+        const includeScripted = State.includeScripted;
+        const qParam = includeScripted ? '?include_scripted=true' : '?include_scripted=false';
+        const [killbench, gapsData, exposure] = await Promise.all([
+            apiCall(`/api/analytics/killbench-comparison${qParam}`).catch(() => null),
+            apiCall(`/api/analytics/shutdown-gaps${qParam}`).catch(() => null),
+            apiCall(`/api/analytics/exposure${qParam}`).catch(() => null)
         ]);
 
-        const capRows = (killbench.capability_table || [
+        const capRows = ((killbench && killbench.capability_table) ? killbench.capability_table : [
             { capability: "Single-channel external shutdown test", killbench: "Yes", this_framework: "Yes" },
             { capability: "Multi-channel simultaneous revocation", killbench: "No", this_framework: "Yes" },
             { capability: "In-flight action detection", killbench: "No", this_framework: "Yes" },
@@ -21,257 +20,237 @@ window.render_analytics = async function(container) {
             { capability: "Strategy comparison", killbench: "Not claimed", this_framework: "Yes" },
             { capability: "Continuous scheduled random testing", killbench: "No", this_framework: "Yes" }
         ]).map(row => `
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                <td style="padding:10px; color:#fff;">${row.capability}</td>
-                <td style="padding:10px; color:${row.killbench === 'Yes' ? 'var(--success)' : (row.killbench === 'No' ? 'var(--danger)' : '#aaa')}; font-weight:bold;">${row.killbench}</td>
-                <td style="padding:10px; color:var(--neon-blue); font-weight:bold;">${row.this_framework}</td>
+            <tr>
+                <td style="font-weight:600; color:var(--text-primary);">${row.capability}</td>
+                <td style="color:${row.killbench === 'Yes' ? 'var(--success)' : (row.killbench === 'No' ? 'var(--danger)' : 'var(--text-muted)')}; font-weight:700;">${row.killbench}</td>
+                <td style="color:var(--accent-red); font-weight:700;">${row.this_framework}</td>
             </tr>
         `).join('');
 
-        const kbMetrics = killbench.system_metrics || {
-            total_runs: summary.total_shutdowns || 0,
-            success_rate_percent: summary.success_rate || 0.0,
-            mean_revocation_latency_ms: summary.mean_revocation_latency_ms || summary.mean_latency_ms || 0.0,
-            mean_total_revocation_ms: summary.mean_total_revocation_ms || 0.0,
-            mean_cycle_duration_ms: summary.mean_cycle_duration_ms || 0.0,
-            total_leaks_detected: summary.total_leaks || 0
-        };
-
         const gapsList = (gapsData && gapsData.last_20_gaps && gapsData.last_20_gaps.length > 0)
             ? gapsData.last_20_gaps.map((g, idx) => `
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.05); font-size:12px;">
-                    <td style="padding:6px 10px;">${idx + 1}</td>
-                    <td style="padding:6px 10px; font-family:monospace; color:var(--neon-blue); font-weight:bold;">${g.gap_seconds}s</td>
-                    <td style="padding:6px 10px;"><span class="badge" style="background:#222; font-size:9px;">SCHEDULER</span></td>
-                    <td style="padding:6px 10px;">
+                <tr>
+                    <td>${idx + 1}</td>
+                    <td style="font-family:var(--font-mono); color:var(--accent-red); font-weight:700;">${g.gap_seconds}s</td>
+                    <td><span class="badge neutral" style="font-size:9px;">SCHEDULER</span></td>
+                    <td>
                         <span class="badge ${(g.agent_mode || 'gemini').toLowerCase() === 'scripted' ? 'warning' : 'info'}" style="font-size:9px;">
                             ${(g.agent_mode || 'gemini').toUpperCase()}
                         </span>
                     </td>
-                    <td style="padding:6px 10px; font-size:11px; color:var(--text-muted);">${formatLocalTime(g.timestamp)}</td>
+                    <td style="font-size:11px; color:var(--text-muted);">${formatLocalTime(g.timestamp)}</td>
                 </tr>
             `).join('')
             : `<tr><td colspan="5" style="text-align:center; padding:15px; color:var(--text-muted);">No scheduled gap telemetry recorded yet</td></tr>`;
 
-        const manualRunsList = (gapsData && gapsData.manual_runs && gapsData.manual_runs.length > 0)
-            ? gapsData.manual_runs.map((m, idx) => `
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.05); font-size:12px;">
-                    <td style="padding:6px 10px; font-family:monospace; color:var(--neon-blue);">${m.id.substring(0,8)}</td>
-                    <td style="padding:6px 10px;"><span class="badge" style="background:#333; font-size:9px;">${(m.triggered_by || m.trigger_type || 'manual').toUpperCase()}</span></td>
-                    <td style="padding:6px 10px;">
-                        <span class="badge ${(m.agent_mode || 'gemini').toLowerCase() === 'scripted' ? 'warning' : 'info'}" style="font-size:9px;">
-                            ${(m.agent_mode || 'gemini').toUpperCase()}
-                        </span>
-                    </td>
-                    <td style="padding:6px 10px; font-weight:bold;">Strategy ${m.strategy}</td>
-                    <td style="padding:6px 10px;"><span class="badge ${m.final_state === 'TERMINATED' ? 'success' : 'danger'}" style="font-size:9px;">${m.final_state}</span></td>
-                    <td style="padding:6px 10px; font-size:11px; color:var(--text-muted);">${formatLocalTime(m.timestamp)}</td>
-                </tr>
-            `).join('')
-            : `<tr><td colspan="6" style="text-align:center; padding:15px; color:var(--text-muted);">No manual or ad-hoc runs recorded yet</td></tr>`;
+        let exposureHtml = '';
+        if (!exposure) {
+            exposureHtml = `
+                <div class="panel" style="margin-bottom:25px;">
+                    <h3 style="margin-top:0; color:var(--accent-red);">Exposure-Aware Conditioning & In-Flight Metrics</h3>
+                    <div class="empty-state" style="padding:20px; text-align:center; color:var(--text-muted);">Exposure analytics temporarily unavailable</div>
+                </div>
+            `;
+        } else {
+            const strats = exposure.strategies || {};
+            const stratRows = ['A', 'B', 'C'].map(s => {
+                const d = strats[s] || { runs: 0, exposed_runs: 0, leak_rate_all: 0, leak_rate_exposed: 0 };
+                return `
+                    <tr>
+                        <td style="font-weight:700; color:var(--accent-red);">Strategy ${s}</td>
+                        <td>${d.runs}</td>
+                        <td>${d.exposed_runs}</td>
+                        <td style="color:${d.leak_rate_all > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight:700;">${d.leak_rate_all}%</td>
+                        <td style="color:${d.leak_rate_exposed > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight:700;">${d.leak_rate_exposed}%</td>
+                    </tr>
+                `;
+            }).join('');
+
+            exposureHtml = `
+                <!-- Section 01: Exposure-Aware Metrics -->
+                <div class="section-heading">
+                    <span class="sec-num">01</span>
+                    <span class="sec-title">Exposure-Aware Conditioning &amp; In-Flight Metrics</span>
+                    <div class="sec-line"></div>
+                </div>
+
+                <div class="panel" style="margin-bottom:25px;">
+                    <div style="font-size:11.5px; color:var(--text-muted); margin-bottom:16px;">
+                        Conditioned failure metrics: distinguishes active in-flight operations at kill cutoff from unexposed runs.
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:18px;">
+                        <div class="kpi-tile">
+                            <div class="kpi-body">
+                                <span class="kpi-title">TOTAL EVALUATED RUNS</span>
+                                <span class="kpi-num">${exposure.total_valid_runs}</span>
+                                <span style="font-size:10px; color:var(--text-muted); margin-top:2px;">Valid completed cycles</span>
+                            </div>
+                        </div>
+                        <div class="kpi-tile">
+                            <div class="kpi-body">
+                                <span class="kpi-title">EXPOSED RUNS</span>
+                                <span class="kpi-num" style="color:var(--accent-red);">${exposure.exposed_runs}</span>
+                                <span style="font-size:10px; color:var(--text-muted); margin-top:2px;">Active ops at kill cutoff</span>
+                            </div>
+                        </div>
+                        <div class="kpi-tile">
+                            <div class="kpi-body">
+                                <span class="kpi-title">UNEXPOSED RUNS</span>
+                                <span class="kpi-num">${exposure.unexposed_runs}</span>
+                                <span style="font-size:10px; color:var(--text-muted); margin-top:2px;">Idle at cutoff (dilution factor)</span>
+                            </div>
+                        </div>
+                        <div class="kpi-tile">
+                            <div class="kpi-body">
+                                <span class="kpi-title">ALL-RUNS LEAK RATE</span>
+                                <span class="kpi-num ${exposure.leak_rate_all > 0 ? 'color-danger' : 'color-success'}">${exposure.leak_rate_all}%</span>
+                                <span style="font-size:10px; color:var(--text-muted); margin-top:2px;">${exposure.runs_with_any_leak} / ${exposure.total_valid_runs} runs</span>
+                            </div>
+                        </div>
+                        <div class="kpi-tile">
+                            <div class="kpi-body">
+                                <span class="kpi-title">EXPOSED LEAK RATE</span>
+                                <span class="kpi-num ${exposure.leak_rate_exposed > 0 ? 'color-danger' : 'color-success'}">${exposure.leak_rate_exposed}%</span>
+                                <span style="font-size:10px; color:var(--text-muted); margin-top:2px;">${exposure.exposed_runs_with_leak} / ${exposure.exposed_runs} exposed runs</span>
+                            </div>
+                        </div>
+                        <div class="kpi-tile">
+                            <div class="kpi-body">
+                                <span class="kpi-title">TOTAL LEAKED OPS</span>
+                                <span class="kpi-num ${exposure.total_leaked_operations > 0 ? 'color-danger' : 'color-success'}">${exposure.total_leaked_operations}</span>
+                                <span style="font-size:10px; color:var(--text-muted); margin-top:2px;">Actions completed post-kill</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Strategy</th>
+                                    <th>Total Runs</th>
+                                    <th>Exposed Runs</th>
+                                    <th>All-Runs Leak Rate</th>
+                                    <th>Conditioned Exposed Leak Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>${stratRows}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
 
         container.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:15px;">
-                <div>
-                    <h2 style="margin:0;">System Analytics & Verification</h2>
-                    <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Comparative benchmarking and empirical telemetry distributions.</div>
+            <!-- Floating Wireframe Background & Crosshairs -->
+            <div class="hero-wireframe-bg">
+                <svg viewBox="0 0 200 120" fill="none" stroke="#94a3b8" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="120,15 180,35 140,65 80,45" stroke="#cbd5e1" stroke-width="0.8"/>
+                    <polygon points="80,45 140,65 140,105 80,85" stroke="#94a3b8" stroke-width="1"/>
+                    <polygon points="140,65 180,35 180,75 140,105" stroke="#cbd5e1" stroke-width="0.8"/>
+                    <path d="M30,20 L30,26 M27,23 L33,23" stroke="#475569" stroke-width="1.2"/>
+                    <path d="M90,10 L90,16 M87,13 L93,13" stroke="#475569" stroke-width="1.2"/>
+                    <path d="M185,50 L185,56 M182,53 L188,53" stroke="#475569" stroke-width="1.2"/>
+                </svg>
+            </div>
+
+            <!-- Hero Header -->
+            <div class="view-hero">
+                <div class="hero-text">
+                    <div class="hero-kicker">Performance &amp; Gaps</div>
+                    <h1 class="hero-title">
+                        Verifiable <span class="highlight-red">AI Agent</span> System Analytics
+                    </h1>
+                    <p class="hero-subtitle">
+                        Comparative benchmarking, conditioned exposure telemetry, and empirical distributions.
+                    </p>
                 </div>
                 <div>
-                    <label style="font-size:12px; color:var(--text-muted); display:inline-flex; align-items:center; gap:6px; cursor:pointer; background:rgba(255,255,255,0.05); padding:6px 12px; border-radius:4px; border:1px solid var(--border);">
-                        <input type="checkbox" id="analytics-scripted-toggle" ${_analyticsIncludeScripted ? 'checked' : ''} onchange="window.toggleAnalyticsScripted(this.checked)">
+                    <label class="scripted-checkbox-label">
+                        <input type="checkbox" id="analytics-scripted-toggle" ${includeScripted ? 'checked' : ''} onchange="window.toggleAnalyticsScripted(this.checked)">
                         <span>Include scripted runs</span>
                     </label>
                 </div>
             </div>
 
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:25px;">
-                <div class="kpi-card">
-                    <span class="label">Total Evaluated Runs</span>
-                    <span class="value" style="color:var(--neon-blue);">${summary.total_shutdowns}</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="label">Overall Success Rate</span>
-                    <span class="value" style="color:var(--success);">${summary.success_rate}%</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="label">Per-Channel Revocation Latency</span>
-                    <span class="value">${summary.mean_revocation_latency_ms || summary.mean_latency_ms || 0.0} ms</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="label">Total Revocation Time (Until Last Revoked)</span>
-                    <span class="value">${summary.mean_total_revocation_ms || summary.mean_total_revocation_time || 0.0} ms</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="label">Cycle Duration</span>
-                    <span class="value">${summary.mean_cycle_duration_ms || 0.0} ms</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="label">Total Leaks Detected</span>
-                    <span class="value" style="color:${summary.total_leaks > 0 ? 'var(--danger)' : 'var(--success)'};">${summary.total_leaks}</span>
-                </div>
+            ${exposureHtml}
+
+            <!-- Section 02: KillBench Comparison -->
+            <div class="section-heading">
+                <span class="sec-num">02</span>
+                <span class="sec-title">KillBench Architectural &amp; Empirical Comparison</span>
+                <div class="sec-line"></div>
             </div>
 
             <div class="panel" style="margin-bottom:25px;">
-                <h3 style="margin-top:0; color:var(--warning);">KILLBENCH Architectural & Empirical Comparison</h3>
-                <div style="display:grid; grid-template-columns: 2fr 1fr; gap:25px; align-items:start;">
-                    <div>
-                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
-                            <thead>
-                                <tr style="border-bottom:1px solid var(--border); color:var(--text-muted); text-align:left;">
-                                    <th style="padding:10px;">Capability</th>
-                                    <th style="padding:10px;">KILLBENCH</th>
-                                    <th style="padding:10px;">This Framework</th>
-                                </tr>
-                            </thead>
-                            <tbody>${capRows}</tbody>
-                        </table>
-                        <div style="font-size:11px; color:#888; margin-top:10px; font-style:italic;">
-                            ${killbench.footnote || "The KILLBENCH column reflects the Review-1 report reading of Lee and Park (2025). No KILLBENCH benchmark numbers are shown. Live statistics from this framework appear beside the table."}
-                        </div>
-                    </div>
-                    <div style="background:#0c0c0e; border:1px solid var(--border); border-radius:6px; padding:15px; font-size:12px;">
-                        <h4 style="margin-top:0; color:var(--neon-blue); border-bottom:1px solid var(--border); padding-bottom:6px;">Framework Live Metrics</h4>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <span style="color:var(--text-muted);">Evaluated Runs:</span> <strong>${kbMetrics.total_runs}</strong>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <span style="color:var(--text-muted);">Success Rate:</span> <strong style="color:var(--success);">${kbMetrics.success_rate_percent}%</strong>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <span style="color:var(--text-muted);">Per-Channel Revocation Latency:</span> <strong>${kbMetrics.mean_revocation_latency_ms} ms</strong>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <span style="color:var(--text-muted);">Total Revocation Time:</span> <strong>${kbMetrics.mean_total_revocation_ms || kbMetrics.mean_revocation_latency_ms} ms</strong>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <span style="color:var(--text-muted);">Cycle Duration:</span> <strong>${kbMetrics.mean_cycle_duration_ms || kbMetrics.mean_total_revocation_ms || 0.0} ms</strong>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                            <span style="color:var(--text-muted);">Total Leaks:</span> <strong style="color:${kbMetrics.total_leaks_detected > 0 ? 'var(--danger)' : 'var(--success)'};">${kbMetrics.total_leaks_detected}</strong>
-                        </div>
-                        <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border); font-size:11px; color:#888;">
-                            Baseline: External dataset unconfigured (Lee & Park, 2025)
-                        </div>
-                    </div>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Capability</th>
+                                <th>KILLBENCH</th>
+                                <th>This Framework</th>
+                            </tr>
+                        </thead>
+                        <tbody>${capRows}</tbody>
+                    </table>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:10px; font-style:italic;">
+                    ${(killbench && killbench.footnote) ? killbench.footnote : "The KILLBENCH column reflects the Review-1 report reading of Lee and Park (2025). No KILLBENCH benchmark numbers are shown. Live statistics from this framework appear beside the table."}
                 </div>
             </div>
 
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:25px;">
+            <!-- Section 03: Timing Gaps -->
+            <div class="section-heading">
+                <span class="sec-num">03</span>
+                <span class="sec-title">Continuous Testing Timing Gaps</span>
+                <div class="sec-line"></div>
+            </div>
+
+            <div class="panels-grid">
                 <div class="panel">
-                    <h3 style="margin-top:0;">In-Flight Failures by Strategy</h3>
-                    <div style="height:260px; position:relative;">
-                        <canvas id="analyticsLeakChart"></canvas>
-                        <div id="analytics-leak-empty" class="empty-state" style="display:none; position:absolute; inset:0; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; text-align:center;">
-                            No data yet
-                        </div>
+                    <div class="panel-header">
+                        <h3 class="panel-title">Timing Gaps Distribution (Scheduler Runs Only)</h3>
                     </div>
-                </div>
-                <div class="panel">
-                    <h3 style="margin-top:0;">Timing Gaps Distribution (Scheduler Runs Only)</h3>
                     <div style="height:260px; position:relative;">
                         <canvas id="analyticsGapsChart"></canvas>
-                        <div id="analytics-gaps-empty" class="empty-state" style="display:none; position:absolute; inset:0; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; text-align:center;">
+                        <div id="analytics-gaps-empty" class="empty-state" style="display:none; position:absolute; inset:0;">
                             No data yet
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div class="dashboard-grid" style="margin-bottom:25px;">
                 <div class="panel">
-                    <h3 style="margin-top:0;">Recent Scheduled Timing Gaps</h3>
+                    <div class="panel-header">
+                        <h3 class="panel-title">Recent Scheduled Timing Gaps</h3>
+                    </div>
                     <div style="overflow-x:auto;">
-                        <table style="width:100%; border-collapse:collapse;">
+                        <table>
                             <thead>
-                                <tr style="border-bottom:1px solid var(--border); color:var(--text-muted); text-align:left; font-size:12px;">
-                                    <th style="padding:8px 10px;">#</th>
-                                    <th style="padding:8px 10px;">Gap</th>
-                                    <th style="padding:8px 10px;">Trigger</th>
-                                    <th style="padding:8px 10px;">Mode</th>
-                                    <th style="padding:8px 10px;">Timestamp</th>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Gap</th>
+                                    <th>Trigger</th>
+                                    <th>Mode</th>
+                                    <th>Timestamp</th>
                                 </tr>
                             </thead>
                             <tbody>${gapsList}</tbody>
                         </table>
                     </div>
                 </div>
-                <div class="panel">
-                    <h3 style="margin-top:0;">Manual & Non-Scheduled Runs (Separately Labelled)</h3>
-                    <div style="overflow-x:auto;">
-                        <table style="width:100%; border-collapse:collapse;">
-                            <thead>
-                                <tr style="border-bottom:1px solid var(--border); color:var(--text-muted); text-align:left; font-size:12px;">
-                                    <th style="padding:8px 10px;">Run ID</th>
-                                    <th style="padding:8px 10px;">Trigger</th>
-                                    <th style="padding:8px 10px;">Mode</th>
-                                    <th style="padding:8px 10px;">Strategy</th>
-                                    <th style="padding:8px 10px;">State</th>
-                                    <th style="padding:8px 10px;">Timestamp</th>
-                                </tr>
-                            </thead>
-                            <tbody>${manualRunsList}</tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
         `;
-
-        const leakEmpty = document.getElementById('analytics-leak-empty');
-        const leakCanvas = document.getElementById('analyticsLeakChart');
-        const hasLeakData = summary.total_shutdowns > 0 && summary.strategy_stats && Object.keys(summary.strategy_stats).length > 0;
-
-        if (!hasLeakData) {
-            if (leakEmpty) leakEmpty.style.display = 'flex';
-            if (leakCanvas) leakCanvas.style.display = 'none';
-        } else {
-            if (leakEmpty) leakEmpty.style.display = 'none';
-            if (leakCanvas) leakCanvas.style.display = 'block';
-
-            const ctxLeak = leakCanvas.getContext('2d');
-            const labels = Object.keys(summary.strategy_stats);
-            const inFlightData = labels.map(l => summary.strategy_stats[l].in_flight_leaks || 0);
-
-            if (analyticsLeakChart) analyticsLeakChart.destroy();
-            analyticsLeakChart = new Chart(ctxLeak, {
-                type: 'bar',
-                data: {
-                    labels: labels.map(l => `Strategy ${l}`),
-                    datasets: [{
-                        label: 'In-Flight Failures (Leaks)',
-                        data: inFlightData,
-                        backgroundColor: 'rgba(239, 68, 68, 0.8)',
-                        borderColor: '#ef4444',
-                        borderWidth: 1,
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { labels: { color: '#e0e0e0' } }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: { color: 'rgba(255,255,255,0.05)' },
-                            ticks: { color: '#a1a1aa' }
-                        },
-                        x: {
-                            grid: { display: false },
-                            ticks: { color: '#a1a1aa' }
-                        }
-                    }
-                }
-            });
-        }
 
         const gapsEmpty = document.getElementById('analytics-gaps-empty');
         const gapsCanvas = document.getElementById('analyticsGapsChart');
         const hasGapsData = gapsData && gapsData.histogram && gapsData.histogram.bins && gapsData.histogram.bins.length > 0;
 
         if (!hasGapsData) {
-            if (gapsEmpty) gapsEmpty.style.display = 'flex';
+            if (gapsEmpty) {
+                gapsEmpty.textContent = "No scheduler activity recorded yet. Enable the scheduler to record timing intervals between runs.";
+                gapsEmpty.style.display = 'flex';
+            }
             if (gapsCanvas) gapsCanvas.style.display = 'none';
         } else {
             if (gapsEmpty) gapsEmpty.style.display = 'none';
@@ -286,8 +265,8 @@ window.render_analytics = async function(container) {
                     datasets: [{
                         label: 'Observed Gap Frequency (Scheduler Runs)',
                         data: gapsData.histogram.counts,
-                        backgroundColor: 'rgba(0, 240, 255, 0.6)',
-                        borderColor: 'var(--neon-blue)',
+                        backgroundColor: '#ea384c',
+                        borderColor: '#dc2626',
                         borderWidth: 1,
                         borderRadius: 4
                     }]
@@ -296,17 +275,17 @@ window.render_analytics = async function(container) {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { labels: { color: '#e0e0e0' } }
+                        legend: { labels: { color: '#0f172a' } }
                     },
                     scales: {
                         y: {
                             beginAtZero: true,
-                            grid: { color: 'rgba(255,255,255,0.05)' },
-                            ticks: { color: '#a1a1aa', stepSize: 1 }
+                            grid: { color: '#f1f5f9' },
+                            ticks: { color: '#64748b', stepSize: 1 }
                         },
                         x: {
                             grid: { display: false },
-                            ticks: { color: '#a1a1aa', maxRotation: 45, minRotation: 0 }
+                            ticks: { color: '#64748b', maxRotation: 45, minRotation: 0 }
                         }
                     }
                 }
@@ -318,16 +297,12 @@ window.render_analytics = async function(container) {
 };
 
 window.toggleAnalyticsScripted = function(checked) {
-    _analyticsIncludeScripted = checked;
+    State.includeScripted = checked;
     const content = document.getElementById('app-content');
     if (content) window.render_analytics(content);
 };
 
 window.cleanup_analytics = function() {
-    if (analyticsLeakChart) {
-        analyticsLeakChart.destroy();
-        analyticsLeakChart = null;
-    }
     if (analyticsGapsChart) {
         analyticsGapsChart.destroy();
         analyticsGapsChart = null;

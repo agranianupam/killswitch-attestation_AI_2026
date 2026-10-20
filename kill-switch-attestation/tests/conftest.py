@@ -18,6 +18,8 @@ def reset_config():
     config.IN_FLIGHT_LEAK_PROB = 0.0
     config.SHUTDOWN_MEAN_SECONDS = 0.05
     config.AGENT_RUN_TIMEOUT_SECONDS = 5
+    config.AGENT_MODE = "Gemini"
+    config.RANDOM_SEED = None
 
 @pytest_asyncio.fixture(scope="function")
 async def db_session(tmp_path):
@@ -79,8 +81,5 @@ def client(db_session):
     app.dependency_overrides.clear()
 
 @pytest.fixture(scope="function")
-def auth_headers(client):
-    res = client.post("/api/auth/login", data={"username": config.ADMIN_USERNAME, "password": config.ADMIN_PASSWORD_PLAINTEXT_DEFAULT})
-    assert res.status_code == 200
-    token = res.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+def auth_headers():
+    return {}

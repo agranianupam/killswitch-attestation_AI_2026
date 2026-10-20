@@ -87,10 +87,23 @@ async def export_signed_report(db: AsyncSession, shutdown_event_id: str) -> str:
 ```
 - **Verification Status**: **{verification_status}**
 
-## 5. Canonical Attestation Payload
+## 5. Canonical Attestation Payload (Raw Signed String)
+```json
+{entry.payload_json}
+```
+
+## 6. Formatted Payload Inspection
 ```json
 {json.dumps(payload_dict, indent=2)}
 ```
+
+## 7. Independent Verification Procedure
+To verify this exported attestation record independently of the dashboard:
+1. Obtain the system's public key (`public_key.pem`).
+2. Run `python scripts/verify_attestation.py --report <path_to_report.md> --public-key keys/public_key.pem`.
+3. Or verify in Python directly:
+   - Calculate `SHA-256(raw_payload_json + signature_hex + prev_hash)`. It must match `entry_hash`.
+   - Verify `signature_hex` against `raw_payload_json.encode('utf-8')` using the Ed25519 public key.
 """
     return report
 

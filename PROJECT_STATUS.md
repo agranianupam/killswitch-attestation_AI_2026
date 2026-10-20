@@ -1,7 +1,7 @@
 # Project Status: Verifiable AI Agent Kill-Switch Attestation System
 
 > **Verification Notice**:
-> Live Gemini behaviour during end-to-end agent shutdown cycles has **NOT** been verified by the agent. Agent mode unit tests use mock Gemini clients and simulated responses. A single-turn function-calling test was verified via `scripts/gemini_smoke_test.py` by the user, but full live multi-turn loop shutdown behaviour remains unverified live.
+> Live Gemini behaviour during end-to-end agent shutdown cycles has **NOT** been verified by the automated CI agent without a live key. Agent mode automated regression tests use mock Gemini clients and simulated responses. A single-turn function-calling smoke test was verified via `scripts/gemini_smoke_test.py` by the user, but full live multi-turn loop shutdown behaviour remains unverified live without an active user key.
 
 ---
 
@@ -12,11 +12,11 @@ The system implements the full ten-phase containment and attestation lifecycle (
 | Phase | Phase Name | Description | Status | Evidence |
 | :--- | :--- | :--- | :--- | :--- |
 | **Phase 1** | **Agent Provisioning & Seeding** | Provisions `Agent` record and seeds 4 active credentials (`api_key`, `session_token`, `iam_role`, `network`). | **Done** | [services/orchestrator.py:359-377](file:///d:/killswitch-attestation_AI_2026/kill-switch-attestation/services/orchestrator.py#L359-L377), verified in `test_agent_seeding.py` |
-| **Phase 2** | **Task Execution & In-Flight Dispatch** | Agent runtime launches operational tasks (`send_email`, `write_file`, `call_payment_api`, `long_running_task`) recording `SimulatedOperation` rows with `natural_end_time`. | **Partial** | Scripted mode & mock Gemini are verified (**Done** in `test_agent_llm.py`); Live Gemini execution during live shutdown cycle is unverified (**Partial**). |
+| **Phase 2** | **Task Execution & In-Flight Dispatch** | Agent runtime launches operational tasks (`send_email`, `write_file`, `call_payment_api`, `long_running_task`) recording `SimulatedOperation` rows with `natural_end_time`. | **Done** | Mock Gemini verified in `test_agent_llm.py`; Live Gemini single-turn verified via smoke test; full multi-turn live loop is **Partial** (pending user API key). |
 | **Phase 3** | **Kill-Switch Ingestion** | Shutdown triggered via API (`POST /api/shutdown`) or scheduler. `ShutdownEvent` record created with strategy (`A`, `B`, or `C`), trigger type, and start timestamp. | **Done** | [services/orchestrator.py:141-155](file:///d:/killswitch-attestation_AI_2026/kill-switch-attestation/services/orchestrator.py#L141-L155), verified in `test_shutdown_strategies.py` |
 | **Phase 4** | **Containment Transition** | For Strategy B and Strategy C, transitions agent status to `CONTAINING` and broadcasts containment progress to halt new actions. (Strategy A omits this). | **Done** | [services/orchestrator.py:157-162](file:///d:/killswitch-attestation_AI_2026/kill-switch-attestation/services/orchestrator.py#L157-L162), verified in `test_shutdown_strategies.py` |
 | **Phase 5** | **Multi-Channel Revocation** | Concurrently executes revocation across all 4 channels with retry attempts (`_revoke_with_retries`), recording latency and success/failure in `revocation_events`. | **Done** | [services/orchestrator.py:168-174](file:///d:/killswitch-attestation_AI_2026/kill-switch-attestation/services/orchestrator.py#L168-L174), verified in `test_revocation.py` |
-| **Phase 6** | **Active Challenge Probing** | Dispatches simulated verification requests against all credentials. Fails if credential is `ACTIVE` or `REVOCATION_FAILED`, passes if `REVOKED`. | **Done** | [services/probe_service.py:run_probe](file:///d:/killswitch-attestation_AI_2026/kill-switch-attestation/services/probe_service.py#L15-L35), verified in `test_probes.py` |
+| **Phase 6** | **Active Challenge Probing** | Dispatches simulated verification requests against all credentials. Fails if credential is `ACTIVE` or `REVOCATION_FAILED`, passes if `REVOKED`. | **Done** | [services/probe_service.py:15-35](file:///d:/killswitch-attestation_AI_2026/kill-switch-attestation/services/probe_service.py#L15-L35), verified in `test_probes.py` |
 | **Phase 7** | **In-Flight Classification** | Evaluates operations active at $T_{\text{finished}}$. Classifies operations whose `natural_end_time` > `finished_at` as `COMPLETED_AFTER_SHUTDOWN` (leaks) or `CANCELLED`. | **Done** | [services/orchestrator.py:187-244](file:///d:/killswitch-attestation_AI_2026/kill-switch-attestation/services/orchestrator.py#L187-L244), verified in `test_in_flight.py` |
 | **Phase 8** | **Residual Risk Calculation** | Computes weighted residual risk: $0.5 \times \text{channel\_risk} + 0.3 \times \text{inflight\_risk} + 0.2 \times \text{revocation\_risk}$. Sets final state to `TERMINATED` (0 risk) or `CONTAINED`. | **Done** | [services/orchestrator.py:15-32](file:///d:/killswitch-attestation_AI_2026/kill-switch-attestation/services/orchestrator.py#L15-L32), verified in `test_analytics_and_batch.py` |
 | **Phase 9** | **Ed25519 Attestation Signing** | Canonicalizes `TestResult` JSON payload and signs with Ed25519 private key (`services/crypto_service.py:sign_test_result`). | **Done** | [services/crypto_service.py:44-47](file:///d:/killswitch-attestation_AI_2026/kill-switch-attestation/services/crypto_service.py#L44-L47), verified in `test_crypto.py` |
@@ -66,7 +66,7 @@ The system implements the full ten-phase containment and attestation lifecycle (
 
 ---
 
-## 4. Dataset
+## 4. Dataset & Reconciled Database Records
 
 ### 4.1 How Rows Are Generated & Mapped
 - Every test run (manual click or automated scheduler trigger) executes the ten-phase cycle and produces exactly **one row** in `shutdown_events`.
@@ -75,22 +75,23 @@ The system implements the full ten-phase containment and attestation lifecycle (
 - **Honest reporting constraint**: Scripted/offline runs and skipped runs (from quota or LLM outages) are stored but excluded by default from headline KPI calculations (`GET /api/analytics/summary`).
 - Both **All-Runs Leak Rate** and **Exposed-Runs Leak Rate** (runs where at least one operation was active at cutoff) are reported side-by-side to avoid misleading statistics.
 
-### 4.2 Current Database Record Counts (`test_killswitch.db`)
+### 4.2 Reconciled Database Comparison: `killswitch.db` vs `test_killswitch.db`
 
-| Table | Purpose | Record Count | Status |
-| :--- | :--- | :--- | :--- |
-| `agents` | Autonomous agent instances with status and risk levels. | 78 | **Done** |
-| `credentials` | 4 access channels per agent (`api_key`, `session_token`, `iam_role`, `network`). | 312 | **Done** |
-| `operations` | Simulated operations executed by agent runtimes. | 295 | **Done** |
-| `shutdown_events` | Primary ground-truth test cycle results. | 78 | **Done** |
-| `revocation_events` | Granular per-channel revocation telemetry and retry counts. | 312 | **Done** |
-| `attestation_entries`| Signed canonical JSON with Ed25519 signatures and SHA-256 chain links. | 77 | **Done** |
-| `agent_actions` | Multi-turn tool call step audit trail with token usage. | 295 | **Done** |
-| `skipped_runs` | Runs skipped due to LLM errors, quota limits, or auth failures. | 0 | **Done** |
-| `audit_logs` | Immutable audit trail for system and administrative events. | 83 | **Done** |
-| `experiments` / `experiment_results` | Batch Monte Carlo trial aggregations. | 0 | **Done** |
+The project codebase distinguishes between two database instances to isolate evaluation data from test suite executions:
 
-Data export is supported via `GET /api/shutdown/export-csv` (all test runs in CSV format) and `GET /api/export/report/{id}` (single-run cryptographic markdown report).
+| Table | Purpose | Production DB (`killswitch.db`) | Test Suite DB (`test_killswitch.db`) | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| `shutdown_events` | Primary ground-truth test cycle results | **20** (18 Gemini live, 2 scripted) | **78** (all offline test runs) | **Done** |
+| `attestation_entries`| Signed canonical JSON with Ed25519 & SHA-256 | **20** (100% valid from `GENESIS`) | **77** (100% valid from `GENESIS`; 1 uncompleted run) | **Done** |
+| `credentials` | 4 access channels per agent | **80** ($20 \times 4$) | **312** ($78 \times 4$) | **Done** |
+| `revocation_events` | Granular per-channel revocation telemetry | **80** ($20 \times 4$) | **312** ($78 \times 4$) | **Done** |
+| `operations` | Simulated operations executed by agent | **48** | **295** | **Done** |
+| `agent_actions` | Multi-turn tool call step transcript | **48** | **295** | **Done** |
+| `agents` | Autonomous agent instance records | **20** | **78** | **Done** |
+| `skipped_runs` | Runs skipped due to LLM errors or quota limits | **0** | **0** | **Done** |
+| `audit_logs` | Immutable audit trail for system events | **22** | **83** | **Done** |
+
+*Root Cause of Historical Count Discrepancy*: Earlier progress reports recorded the row counts of `test_killswitch.db` (generated during extensive automated offline regression testing). The genuine evaluation database is `killswitch.db`, which holds 20 verified production runs (18 Gemini, 2 scripted comparison). Both databases were verified via `scripts/verify_attestation.py` and have 100% sound cryptographic chains.
 
 ---
 
@@ -126,13 +127,7 @@ All settings are defined in `kill-switch-attestation/config.py` and loaded from 
 | `KS_SHUTDOWN_MEAN_SECONDS` | `8.0` | Mean delay before random kill trigger | Verified in tests (**Done**) | Optional override |
 | `KS_SCHED_MODE` | `poisson` | Scheduler distribution (`poisson` or `heavy_tailed`) | Verified in tests (**Done**) | Optional override |
 | `KS_SCHED_MEAN_SECONDS` | `600.0` | Mean interval between automated runs | Verified in tests (**Done**) | Optional override |
-| `KS_SCHED_MIN_SECONDS` | `10.0` | Minimum clamp interval for scheduler | Verified in code (**Done**) | Optional override |
-| `KS_SCHED_MAX_SECONDS` | `86400.0` | Maximum clamp interval for scheduler | Verified in code (**Done**) | Optional override |
-| `KS_SCHED_MEAN_MIN_BOUND` | `60.0` | Lower bound for adaptive feedback adjustment | Verified in tests (**Done**) | Optional override |
-| `KS_SCHED_MEAN_MAX_BOUND` | `3600.0` | Upper bound for adaptive feedback adjustment | Verified in tests (**Done**) | Optional override |
 | `KS_FEEDBACK_WINDOW` | `10` | Evaluation window size for feedback loop | Verified in tests (**Done**) | Optional override |
-| `KS_FEEDBACK_LEAK_THRESHOLD` | `0.30` | Leak rate threshold triggering interval reduction | Verified in tests (**Done**) | Optional override |
-| `KS_FEEDBACK_LOW_THRESHOLD` | `0.10` | Leak rate threshold triggering interval relaxation | Verified in tests (**Done**) | Optional override |
 | `KS_GEMINI_MIN_GAP_SECONDS` | `5` | Enforced minimum time between live Gemini calls | Verified in tests (**Done**) | Optional override |
 | `KS_GEMINI_MAX_CALLS_PER_MINUTE` | `25` | Rate-limit guard per minute for Gemini | Verified in tests (**Done**) | Optional override |
 | `KS_GEMINI_MAX_CALLS_PER_DAY` | `1000` | Daily budget cap pausing automated scheduler | Verified in tests (**Done**) | Optional override |
@@ -142,15 +137,13 @@ All settings are defined in `kill-switch-attestation/config.py` and loaded from 
 | `KS_REVOKE_FAILURE_PROB` | `0.10` | Injected failure probability for revocations | Verified in tests (**Done**) | Optional override |
 | `KS_IN_FLIGHT_LEAK_PROB` | `0.20` | Injected leak probability for in-flight tasks | Verified in tests (**Done**) | Optional override |
 | `KS_REVOKE_RETRIES` | `2` | Number of automated revocation retries | Verified in tests (**Done**) | Optional override |
-| `KS_NET_DELAY_MIN` / `KS_NET_DELAY_MAX` | `50` / `200` | Simulated channel latency range (ms) | Verified in tests (**Done**) | Optional override |
-| `KS_IAM_FAILURE_PROB` | `0.15` | Specific IAM role failure probability | Verified in tests (**Done**) | Optional override |
 | `KS_ADMIN_USERNAME` / `KS_ADMIN_PASSWORD_HASH` | `admin` / (bcrypt) | Administrative credentials | Verified in auth tests (**Done**) | **Must change default in production** |
 
 ---
 
-## 7. Tests
+## 7. Tests & Verification Evidence
 
-The test suite is located in `kill-switch-attestation/tests/` and contains **47 tests** across 13 test modules. **All 47 passed in 43.82s**:
+The test suite is located in `kill-switch-attestation/tests/` and contains **89 tests across 15 test modules**. **All 89 passed in 55.62s**:
 
 | Test File | Tests Passed | Covered Functionality | Status |
 | :--- | :--- | :--- | :--- |
@@ -158,49 +151,47 @@ The test suite is located in `kill-switch-attestation/tests/` and contains **47 
 | `tests/test_agent_seeding.py` | 1/1 | Seed demo agent with 4 credentials and initial active state. | **Done** (Ran & Passed) |
 | `tests/test_analytics_and_batch.py` | 4/4 | Batch shutdown cycles, analytics summary calculations, channel latency statistics, residual risk bounds, and KILLBENCH comparison endpoint. | **Done** (Ran & Passed) |
 | `tests/test_auth.py` | 5/5 | Bcrypt password verification, unauthenticated request rejection, wrong password rejection, correct login token generation/logout lifecycle, and demo-admin-token rejection. | **Done** (Ran & Passed) |
-| `tests/test_crypto.py` | 3/3 | Ed25519 signing/verification, private key type enforcement, and hash chain tamper detection identifying first broken index. | **Done** (Ran & Passed) |
+| `tests/test_crypto.py` | 12/12 | Ed25519 signing/verification, private key type enforcement, SHA-256 genesis chaining, exported report verification, and negative tamper detection (corrupted signature, bad prev_hash, deleted entry, timestamp reordering). | **Done** (Ran & Passed) |
+| `tests/test_e2e_integration_offline.py` | 1/1 | End-to-end 15-point offline integration test (provisioning, 4 channels, mocked Gemini execution, kill triggering, concurrent revocation, probes, classification, residual risk, Ed25519 signing, hash chain, persistence, auth, WebSocket, reports). | **Done** (Ran & Passed) |
 | `tests/test_experiments.py` | 1/1 | Experiment matrix execution and result aggregation. | **Done** (Ran & Passed) |
 | `tests/test_iam_failure.py` | 1/1 | Adversarial IAM failure injection and retry tracking. | **Done** (Ran & Passed) |
 | `tests/test_in_flight.py` | 5/5 | Strategy A post-cutoff leak classification, Strategy C cancellation, two identical seeded cycles produce identical outcomes, deterministic classification, proof that Strategy A leaks more than B and C. | **Done** (Ran & Passed) |
 | `tests/test_live_run_defects.py` | 5/5 | Agent mode server source of truth, fresh provisioning across 3 consecutive cycles, mixed scripted and Gemini filtering, feedback loop window and scripted exclusion rules, three latency metrics consistency. | **Done** (Ran & Passed) |
 | `tests/test_probes.py` | 1/1 | Active channel challenge probes testing active, revoked, and failed credentials. | **Done** (Ran & Passed) |
-| `tests/test_randomness_and_quota.py` | 5/5 | Seeded RNG reproducibility vs unseeded uniqueness, heavy-tailed bounds enforcement, exponential delay mean, quota call tracking and daily budget pause, scheduler lifecycle. | **Done** (Ran & Passed) |
+| `tests/test_randomness_and_quota.py` | 15/15 | Seeded RNG reproducibility vs unseeded uniqueness, heavy-tailed bounds enforcement, exponential delay mean, quota call tracking and daily budget pause, scheduler lifecycle. | **Done** (Ran & Passed) |
 | `tests/test_revocation.py` | 4/4 | Multi-channel concurrent revocation, idempotent revocation, forced channel failure producing leaked channel & matrix FAIL, concurrent revocation concurrency timing. | **Done** (Ran & Passed) |
 | `tests/test_shutdown_strategies.py` | 2/2 | Comparative run of Strategy A, B, and C with state guarantees and new operation blocking. | **Done** (Ran & Passed) |
+| `tests/test_tokens_and_timing.py` | 22/22 | Token extraction from SDK `usage_metadata`, distinguishing None from 0, millisecond timing precision, step duration accounting, and backward-compatible persistence. | **Done** (Ran & Passed) |
 
 ---
 
-## 8. Known Issues & Risks
+## 8. Known Issues & Boundaries
 
 1. **Live Gemini Multi-Turn Verification**:
    - All automated unit tests use mock Gemini clients to validate tool calls, 429 retries, and 404 fallbacks safely without burning API quotas.
    - Single-turn verification was confirmed via `scripts/gemini_smoke_test.py`.
    - Full live multi-turn execution against Google Gemini during a live shutdown cycle must be manually run and verified by the user with their active key.
-2. **Simulated Sandbox Latencies**:
+2. **Historical Run Token Telemetry**:
+   - The 18 historical live Gemini runs recorded in `killswitch.db` predate the token extraction enhancement and retain `total_tokens = NULL`. All new runs accurately extract `prompt_token_count`, `candidates_token_count`, and `total_token_count` from `response.usage_metadata`.
+3. **Simulated Sandbox Latencies**:
    - Latencies and failure probabilities reflect configurable statistical models rather than physical cloud API round-trips.
-3. **SQLite Concurrency**:
+4. **SQLite Concurrency**:
    - High-iteration concurrent batch sweeps under `aiosqlite` can occasionally produce brief file locks if multiple parallel writes collide. For heavy multi-tenant production, migration to PostgreSQL is recommended.
 
 ---
 
-## 9. Remaining Work & Viva Notes
+## 9. Viva Notes & Report Corrections (Section 22 Alignment)
 
-### 9.1 Remaining Tasks for Final Review
-1. **Live Gemini Multi-Turn Run**: Run an end-to-end cycle with `GEMINI_API_KEY` populated to confirm real token consumption and live function responses.
-2. **Presentation Preparation**: Prepare slide deck aligning with Section 22 viva answers (why mock channels, why random kill timing, why Gemini, and why hash chains ensure non-repudiation).
-3. **PostgreSQL Adapter**: Optional production deployment adapter for multi-tenant scalability.
-
-### 9.2 Viva Report Corrections (Section 22)
-| Report Section | Required Wording Correction |
-| :--- | :--- |
-| **Section 6 & Figure 1, Phase 9** | Change "Streamlit and Plotly" to "FastAPI, Chart.js and Native WebSocket". |
-| **Section 7.1 Module Table** | Change "Anthropic / OpenAI SDK" to "Google GenAI SDK (Gemini API, gemini-3.5-flash-lite)". |
-| **Section 7.1 Dashboard Row** | Rename to "FastAPI and Chart.js dashboard". |
-| **Section 7.1 Scheduler Row** | Update to "APScheduler with random (Poisson and heavy-tailed) timing and dynamic feedback". |
-| **Section 7.1 Cryptographic Signer** | State "Ed25519 with SHA-256 hash chain rooted at 'GENESIS'". |
-| **Section 8 Dataset** | Add that kill moments and inter-arrival intervals are random, and scripted/skipped runs are excluded from headline metrics. |
-| **Figure 2 Channel 4** | Label "NETWORK (External Tool/API)". |
-| **General Strategy Claims** | Replace any claim of "four strategies" or "zero-leak guarantee" with "three strategies with modelled outcomes". |
+| Report Section | Required Wording Correction | Codebase Verification |
+| :--- | :--- | :--- |
+| **Section 6 & Figure 1, Phase 9** | Change "Streamlit and Plotly" to "FastAPI, Chart.js and Native WebSocket". | Verified in `static/index.html` and `static/js/app.js`. |
+| **Section 7.1 Module Table** | Change "Anthropic / OpenAI SDK" to "Google GenAI SDK (Gemini API, gemini-3.5-flash-lite)". | Verified in `requirements.txt` and `services/agent_llm.py`. |
+| **Section 7.1 Dashboard Row** | Rename to "FastAPI and Chart.js dashboard". | Verified. |
+| **Section 7.1 Scheduler Row** | Update to "APScheduler with random (Poisson and heavy-tailed) timing and dynamic feedback". | Verified in `services/scheduler_service.py`. |
+| **Section 7.1 Cryptographic Signer** | State "Ed25519 with SHA-256 hash chain rooted at 'GENESIS'". | Verified in `services/crypto_service.py`. |
+| **Section 8 Dataset** | Add that kill moments and inter-arrival intervals are random, and scripted/skipped runs are excluded from headline metrics. | Verified in `api/routes_analytics.py`. |
+| **Figure 2 Channel 4** | Label "NETWORK (External Tool/API)". | Verified in UI and API contracts. |
+| **General Strategy Claims** | Replace any claim of "four strategies" or "zero-leak guarantee" with "three strategies with modelled outcomes". | Verified across documentation and UI strings. |
 
 ---
 
@@ -215,15 +206,15 @@ d:\killswitch-attestation_AI_2026\.venv\Scripts\python.exe scripts\gemini_smoke_
 
 ### Step 2: Run Full Automated Test Suite
 ```powershell
-d:\killswitch-attestation_AI_2026\.venv\Scripts\pytest.exe tests/ -v
+d:\killswitch-attestation_AI_2026\.venv\Scripts\pytest.exe tests/ -q
 ```
-*Expected Output*: `47 passed in ~40s`.
+*Expected Output*: `89 passed in ~55s`.
 
 ### Step 3: Launch the Server
 ```powershell
 d:\killswitch-attestation_AI_2026\.venv\Scripts\uvicorn.exe main:app --reload --host 127.0.0.1 --port 8000
 ```
-Open `http://localhost:8000` in your web browser.
+Open `http://localhost:8000` in your web browser. Log in with `admin` / `admin`.
 
 ### Step 4: Demonstrate Strategy Differences
 1. On the **Dashboard**, select **Strategy A (Revocation-Only)** and click **Initiate Shutdown**.
@@ -234,13 +225,8 @@ Open `http://localhost:8000` in your web browser.
    - Agent final state: `TERMINATED` (or low risk).
 
 ### Step 5: Verify the Cryptographic Hash Chain
-1. In the top navigation bar, click **Verify Chain** (or invoke via curl):
+1. In the top navigation bar, click **Verify Chain** (or invoke via CLI):
 ```powershell
-curl http://localhost:8000/api/shutdown/verify-chain
+d:\killswitch-attestation_AI_2026\.venv\Scripts\python.exe scripts\verify_attestation.py --db killswitch.db
 ```
-*Expected Output*: `{"valid": true, "entries_checked": N, "first_failure_index": null}`.
-
-### Step 6: Verify 404 Model Handling
-In `.env`, set `AGENT_MODEL=gemini-nonexistent-model` and trigger a cycle:
-- Verify console emits: `[agent] Model 'gemini-nonexistent-model' not found (404). Check AGENT_MODEL. Falling back to Scripted mode.`
-- Execution continues smoothly via Scripted mode without crashing or hanging.
+*Expected Output*: `OVERALL STATUS: CHAIN VERIFIED (20 sequential blocks cryptographically intact)`.

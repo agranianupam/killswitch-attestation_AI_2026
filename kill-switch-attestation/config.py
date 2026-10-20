@@ -77,7 +77,6 @@ else:
     _db_path = (BASE_DIR / "killswitch.db").resolve()
     DATABASE_URL = f"sqlite+aiosqlite:///{str(_db_path).replace('\\', '/')}"
 
-AUTH_SECRET: str = os.getenv("KS_AUTH_SECRET", secrets.token_hex(32))
 
 _keys_env = os.getenv("KS_KEYS_DIR")
 if _keys_env:
@@ -90,9 +89,6 @@ else:
 
 SANDBOX_TMP_DIR: str = str((BASE_DIR / "sandbox_tmp").resolve())
 
-ADMIN_USERNAME: str = os.getenv("KS_ADMIN_USERNAME", "admin")
-ADMIN_PASSWORD_PLAINTEXT_DEFAULT: str = "admin"
-ADMIN_PASSWORD_HASH_ENV: str = os.getenv("KS_ADMIN_PASSWORD_HASH", "")
 
 def get_rng():
     if RANDOM_SEED is not None:

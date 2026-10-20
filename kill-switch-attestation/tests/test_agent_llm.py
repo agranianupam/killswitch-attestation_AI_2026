@@ -213,15 +213,20 @@ async def test_stop_halts_new_operations():
             agent.stop()
         return f"op-{len(started_ops)}"
 
-    agent = GeminiSandboxedAgent(
-        start_operation=mock_start_operation,
-        client=None
-    )
+    old_mode = config.AGENT_MODE
+    config.AGENT_MODE = "Scripted"
+    try:
+        agent = GeminiSandboxedAgent(
+            start_operation=mock_start_operation,
+            client=None
+        )
 
-    await agent.run()
+        await agent.run()
 
-    assert len(started_ops) == 1
-    assert agent._stop is True
+        assert len(started_ops) == 1
+        assert agent._stop is True
+    finally:
+        config.AGENT_MODE = old_mode
 
 @pytest.mark.asyncio
 async def test_revoked_credential_returns_401_rejection(db_session):

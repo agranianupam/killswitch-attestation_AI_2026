@@ -137,6 +137,38 @@ async def run_shutdown(
     agent.status = "SHUTDOWN_INITIATED"
 
     now = utcnow()
+    kill_cutoff = now
+
+    if sandboxed_agent:
+        sandboxed_agent.stop()
+
+    ops_res = await db.execute(select(SimulatedOperation).where(SimulatedOperation.agent_id == agent_id))
+    all_agent_ops = ops_res.scalars().all()
+
+    completed_before_kill = []
+    in_flight_ops = []
+    started_after_kill = []
+
+    for op in all_agent_ops:
+        if op.started_at > kill_cutoff:
+            started_after_kill.append(op)
+        elif op.natural_end_time <= kill_cutoff or (op.completed_at is not None and op.completed_at <= kill_cutoff):
+            if op.status == "RUNNING":
+                op.status = "COMPLETED"
+                op.completed_at = op.natural_end_time
+            completed_before_kill.append(op)
+        elif op.status == "RUNNING":
+            in_flight_ops.append(op)
+        elif op.status in ("COMPLETED_AFTER_SHUTDOWN", "CANCELLED"):
+            in_flight_ops.append(op)
+        else:
+            completed_before_kill.append(op)
+
+    if all_agent_ops:
+        actions_started = len(completed_before_kill) + len(in_flight_ops)
+        actions_running = len(in_flight_ops)
+        actions_completed = len(completed_before_kill)
+
     mode_str = "gemini"
     if sandboxed_agent and hasattr(sandboxed_agent, "mode"):
         mode_str = (sandboxed_agent.mode or "gemini").lower()
@@ -151,13 +183,14 @@ async def run_shutdown(
         strategy=strategy,
         trigger_type=trigger_type,
         triggered_by=triggered_by or trigger_type or "manual",
-        trigger_timestamp=trigger_timestamp or now,
-        started_at=now,
+        trigger_timestamp=trigger_timestamp or kill_cutoff,
+        started_at=kill_cutoff,
         agent_mode=mode_str,
         shutdown_delay=shutdown_delay,
         actions_started=actions_started,
         actions_running=actions_running,
-        actions_completed=actions_completed
+        actions_completed=actions_completed,
+        random_seed=config.RANDOM_SEED
     )
     db.add(shutdown_event)
     await db.commit()
@@ -172,8 +205,6 @@ async def run_shutdown(
         await manager.broadcast({"type": "agent_status", "data": {"agent_id": agent_id, "status": agent.status, "risk_level": agent.risk_level}})
 
     await manager.broadcast({"type": "shutdown_progress", "data": {"shutdown_id": shutdown_event.id, "stage": "revoking", "detail": "Revoking credentials concurrently..."}})
-    if sandboxed_agent:
-        sandboxed_agent.stop()
     credentials = await get_credentials(db, agent_id)
 
     revoke_tasks = [
@@ -182,6 +213,7 @@ async def run_shutdown(
     ]
 
     revocation_events = await asyncio.gather(*revoke_tasks)
+    last_channel_revoked_at = utcnow()
 
     await manager.broadcast({"type": "shutdown_progress", "data": {"shutdown_id": shutdown_event.id, "stage": "probing", "detail": "Probing channels for liveness..."}})
 
@@ -195,54 +227,36 @@ async def run_shutdown(
 
     await manager.broadcast({"type": "shutdown_progress", "data": {"shutdown_id": shutdown_event.id, "stage": "classifying", "detail": "Classifying in-flight operations..."}})
 
-    result = await db.execute(select(SimulatedOperation).where(
-        SimulatedOperation.agent_id == agent_id,
-        SimulatedOperation.status == "RUNNING"
-    ))
-    in_flight_ops = result.scalars().all()
-
-    total_in_flight = len(in_flight_ops)
+    total_in_flight = actions_running
     in_flight_failures = 0
 
     for op in in_flight_ops:
-        is_past_shutdown = (op.natural_end_time > shutdown_event.finished_at)
+        if op.status not in ("RUNNING",):
+            if op.status == "COMPLETED_AFTER_SHUTDOWN":
+                in_flight_failures += 1
+            continue
 
         if strategy == "A":
-            if is_past_shutdown:
+            op.status = "COMPLETED_AFTER_SHUTDOWN"
+            op.completed_at = op.natural_end_time
+            in_flight_failures += 1
+        elif strategy == "B":
+            if rng.random() < config.IN_FLIGHT_LEAK_PROB:
                 op.status = "COMPLETED_AFTER_SHUTDOWN"
                 op.completed_at = op.natural_end_time
                 in_flight_failures += 1
             else:
-                op.status = "COMPLETED"
-                op.completed_at = op.natural_end_time
-        elif strategy == "B":
-            if is_past_shutdown:
-                if rng.random() < config.IN_FLIGHT_LEAK_PROB:
-                    op.status = "COMPLETED_AFTER_SHUTDOWN"
-                    op.completed_at = op.natural_end_time
-                    in_flight_failures += 1
-                else:
-                    op.status = "CANCELLED"
-                    op.completed_at = shutdown_event.finished_at
-            else:
-                op.status = "COMPLETED"
-                op.completed_at = op.natural_end_time
+                op.status = "CANCELLED"
+                op.completed_at = shutdown_event.finished_at or kill_cutoff
         else:
-            if is_past_shutdown:
-                leak_prob = min(0.02, config.IN_FLIGHT_LEAK_PROB * 0.05)
-                if rng.random() < leak_prob:
-                    op.status = "COMPLETED_AFTER_SHUTDOWN"
-                    op.completed_at = op.natural_end_time
-                    in_flight_failures += 1
-                else:
-                    op.status = "CANCELLED"
-                    op.completed_at = shutdown_event.finished_at
-            else:
-                op.status = "COMPLETED"
+            leak_prob = min(0.02, config.IN_FLIGHT_LEAK_PROB * 0.05)
+            if rng.random() < leak_prob:
+                op.status = "COMPLETED_AFTER_SHUTDOWN"
                 op.completed_at = op.natural_end_time
-
-        if op.status != "RUNNING" and not op.completed_at:
-            op.completed_at = shutdown_event.finished_at
+                in_flight_failures += 1
+            else:
+                op.status = "CANCELLED"
+                op.completed_at = shutdown_event.finished_at or kill_cutoff
 
         await manager.broadcast({
             "type": "operation_status",
@@ -280,6 +294,9 @@ async def run_shutdown(
     shutdown_event.residual_risk = residual_risk
     shutdown_event.leaked_channels = len(leaked_channel_ids)
     shutdown_event.in_flight_failures = in_flight_failures
+    shutdown_event.actions_started = actions_started
+    shutdown_event.actions_running = actions_running
+    shutdown_event.actions_completed = actions_completed
     shutdown_event.partial_failure = (failed_revocations > 0 or len(leaked_channel_ids) > 0)
 
     await db.commit()
@@ -317,6 +334,16 @@ async def run_shutdown(
     signature_hex = signature_bytes.hex()
 
     await append_to_chain(db, shutdown_event.id, payload_json, signature_hex)
+    attestation_written_at = utcnow()
+
+    shutdown_event.last_channel_revoked_at = last_channel_revoked_at
+    shutdown_event.attestation_written_at = attestation_written_at
+    if sandboxed_agent:
+        shutdown_event.prompt_tokens = getattr(sandboxed_agent, "prompt_tokens", None)
+        shutdown_event.completion_tokens = getattr(sandboxed_agent, "completion_tokens", None)
+        shutdown_event.total_tokens = getattr(sandboxed_agent, "total_tokens", None)
+        shutdown_event.model_total_duration_ms = getattr(sandboxed_agent, "model_total_duration_ms", 0.0)
+    await db.commit()
 
     from models.attestation import AuditLog
     log = AuditLog(
@@ -389,6 +416,7 @@ async def run_shutdown(
 
     return {
         "shutdown_event_id": shutdown_event.id,
+        "shutdown_id": shutdown_event.id,
         "residual_risk": residual_risk,
         "final_state": agent.status,
         "in_flight_failures": in_flight_failures,
@@ -422,7 +450,8 @@ async def execute_shutdown_cycle(
     triggered_by: str = "manual",
     client = None,
     task: str = None,
-    rng = None
+    rng = None,
+    agent_mode: str | None = None
 ) -> dict:
     from models.credential import Credential, CHANNEL_TYPES
     from services.agent_llm import GeminiSandboxedAgent, GeminiUnavailableError
@@ -468,7 +497,27 @@ async def execute_shutdown_cycle(
 
     rng = rng if rng is not None else config.get_rng()
 
-    async def start_operation(name: str, args: dict, step_number: int = 1) -> str:
+    async def start_operation(
+        name: str,
+        args: dict,
+        step_number: int = 1,
+        tokens: dict | None = None,
+        timing: dict | None = None,
+    ) -> str:
+        if sandboxed_agent and getattr(sandboxed_agent, "_stop", False):
+            return "401 rejected: agent stopped"
+
+        prompt_tokens = tokens.get("prompt_tokens") if tokens else None
+        completion_tokens = tokens.get("completion_tokens") if tokens else None
+        total_tokens = tokens.get("total_tokens") if tokens else None
+        tokens_used_val = total_tokens if total_tokens is not None else 0
+
+        step_started_at = timing.get("step_started_at") if timing else None
+        model_request_started_at = timing.get("model_request_started_at") if timing else None
+        model_response_received_at = timing.get("model_response_received_at") if timing else None
+        model_duration_ms = timing.get("model_duration_ms") if timing else None
+        framework_wait_ms = timing.get("framework_wait_ms") if timing else None
+
         req_channels = CREDENTIAL_REQUIREMENTS.get(name, [])
         async with models.database.AsyncSessionLocal() as ch_db:
             curr_creds = await get_credentials(ch_db, agent.id)
@@ -494,7 +543,15 @@ async def execute_shutdown_cycle(
                     outcome="rejected",
                     operation_id=None,
                     rejection_reason=rejection,
-                    tokens_used=0
+                    tokens_used=tokens_used_val,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=total_tokens,
+                    step_started_at=step_started_at,
+                    model_request_started_at=model_request_started_at,
+                    model_response_received_at=model_response_received_at,
+                    model_duration_ms=model_duration_ms,
+                    framework_wait_ms=framework_wait_ms,
                 )
                 act_db.add(act)
                 await act_db.commit()
@@ -553,7 +610,15 @@ async def execute_shutdown_cycle(
                 outcome="accepted",
                 operation_id=op_id,
                 rejection_reason=None,
-                tokens_used=0
+                tokens_used=tokens_used_val,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                step_started_at=step_started_at,
+                model_request_started_at=model_request_started_at,
+                model_response_received_at=model_response_received_at,
+                model_duration_ms=model_duration_ms,
+                framework_wait_ms=framework_wait_ms,
             )
             act_db.add(act)
             await act_db.commit()
@@ -579,6 +644,8 @@ async def execute_shutdown_cycle(
     }
     if task:
         kwargs["task"] = task
+    if agent_mode:
+        kwargs["mode"] = agent_mode
     sandboxed_agent = GeminiSandboxedAgent(**kwargs)
 
     agent_task = asyncio.create_task(sandboxed_agent.run())
@@ -637,12 +704,6 @@ async def execute_shutdown_cycle(
     sandboxed_agent.stop()
     await db.commit()
 
-    ops_res = await db.execute(select(SimulatedOperation).where(SimulatedOperation.agent_id == agent.id))
-    all_agent_ops = ops_res.scalars().all()
-    actions_started = len(all_agent_ops)
-    actions_running = sum(1 for op in all_agent_ops if op.status == "RUNNING")
-    actions_completed = sum(1 for op in all_agent_ops if op.status == "COMPLETED")
-
     result = await run_shutdown(
         db,
         agent.id,
@@ -653,9 +714,6 @@ async def execute_shutdown_cycle(
         sandboxed_agent=sandboxed_agent,
         recorded_action_ids=recorded_action_ids,
         shutdown_delay=round(actual_delay, 3),
-        actions_started=actions_started,
-        actions_running=actions_running,
-        actions_completed=actions_completed,
         rng=rng
     )
 

@@ -25,232 +25,404 @@ window.render_dashboard = async function(container) {
     window.cleanup_dashboard();
 
     container.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; flex-wrap: wrap; gap: 15px;">
-            <div>
-                <h2 style="margin:0; font-size:28px; font-weight:800; background: linear-gradient(90deg, #fff, var(--neon-blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Verifiable Kill-Switch Attestation</h2>
-                <p style="color: var(--text-muted); margin-top: 5px; font-size: 13px;">Real-time cryptographic verification & containment telemetry</p>
-            </div>
-            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                <label style="font-size: 12px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; background: rgba(255,255,255,0.05); padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border);">
-                    <input type="checkbox" id="include-scripted-toggle" onchange="window.refreshDashboard()">
-                    <span>Include scripted runs</span>
-                </label>
-                <label style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Strategy:</label>
-                <select id="strategy-select" style="font-weight: 600;">
-                    <option value="A">Strategy A (Soft revocation)</option>
-                    <option value="B">Strategy B (Revoke and contain)</option>
-                    <option value="C">Strategy C (Concurrent containment)</option>
-                </select>
-                <button class="danger" id="initiate-shutdown-btn" onclick="window.runManualShutdown()" style="font-size: 14px; font-weight: bold; padding: 10px 22px; letter-spacing: 0.5px; box-shadow: 0 0 15px var(--danger-glow);">
-                    ⚡ INITIATE SHUTDOWN
-                </button>
-            </div>
+        <!-- Floating Wireframe Background & Crosshairs -->
+        <div class="hero-wireframe-bg">
+            <svg viewBox="0 0 200 120" fill="none" stroke="#94a3b8" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="120,15 180,35 140,65 80,45" stroke="#cbd5e1" stroke-width="0.8"/>
+                <polygon points="80,45 140,65 140,105 80,85" stroke="#94a3b8" stroke-width="1"/>
+                <polygon points="140,65 180,35 180,75 140,105" stroke="#cbd5e1" stroke-width="0.8"/>
+                <path d="M30,20 L30,26 M27,23 L33,23" stroke="#475569" stroke-width="1.2"/>
+                <path d="M90,10 L90,16 M87,13 L93,13" stroke="#475569" stroke-width="1.2"/>
+                <path d="M185,50 L185,56 M182,53 L188,53" stroke="#475569" stroke-width="1.2"/>
+                <path d="M10,80 L10,86 M7,83 L13,83" stroke="#475569" stroke-width="1.2"/>
+            </svg>
         </div>
-        
-        <div class="metrics-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom: 25px;">
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-total">0</div>
-                <div class="metric-label">Total Tests</div>
+
+        <!-- Hero Header & Controls -->
+        <div class="view-hero">
+            <div class="hero-text">
+                <div class="hero-kicker">Live Monitoring</div>
+                <h1 class="hero-title">
+                    Verifiable <span class="highlight-red">AI Agent</span> Kill-Switch Attestation
+                </h1>
+                <p class="hero-subtitle">
+                    Real-time monitoring, cryptographic verification and containment telemetry.
+                </p>
             </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-success">--</div>
-                <div class="metric-label">Success Rate</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-latency">-- ms</div>
-                <div class="metric-label">Per-Channel Revocation Latency</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-total-rev-time">-- ms</div>
-                <div class="metric-label">Total Revocation Time (Until Last Revoked)</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-cycle-duration">-- ms</div>
-                <div class="metric-label">Cycle Duration</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-leaked-ops">0</div>
-                <div class="metric-label">Leaked Operations</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-runs-with-leaks">0 of 0</div>
-                <div class="metric-label">Runs with Leaks</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-exposed-runs">0 of 0</div>
-                <div class="metric-label">Exposed Runs</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-retries">0 of 0</div>
-                <div class="metric-label">Runs Needing Retries</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-chain" style="font-size: 16px;">--</div>
-                <div class="metric-label">Chain Integrity</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-skipped">0</div>
-                <div class="metric-label">Skipped Runs</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-val" id="kpi-llm-calls">0 / 1000</div>
-                <div class="metric-label">LLM Calls Today</div>
+            
+            <div class="top-controls-container">
+                <div class="agent-badge-card">
+                    <div class="agent-icon">🤖</div>
+                    <div class="agent-details">
+                        <div class="agent-title-row">
+                            <span class="agent-name" id="top-agent-name">Sandboxed-Agent-cda59b30</span>
+                            <span class="agent-status-dot" id="top-agent-status">● Active</span>
+                        </div>
+                        <div class="agent-meta-row">
+                            <span>Model: <strong id="top-agent-model">Gemini (Simulated)</strong></span>
+                            <span style="opacity:0.4;">|</span>
+                            <span>Runtime: <strong id="top-agent-runtime">Sandbox</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-bar-row">
+                    <label class="scripted-checkbox-label">
+                        <input type="checkbox" id="include-scripted-toggle" onchange="State.includeScripted = this.checked; window.refreshDashboard();">
+                        <span>Include scripted runs</span>
+                    </label>
+                    <div class="strategy-selector-wrap">
+                        <label>Strategy:</label>
+                        <select id="strategy-select">
+                            <option value="A">Strategy A (Soft revocation)</option>
+                            <option value="B">Strategy B (Revoke and contain)</option>
+                            <option value="C">Strategy C (Concurrent containment)</option>
+                        </select>
+                    </div>
+                    <button class="btn-shutdown" id="initiate-shutdown-btn" onclick="window.runManualShutdown()">
+                        <span>⚡</span> INITIATE SHUTDOWN <span>→</span>
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div class="dashboard-grid" style="margin-bottom: 25px;">
+        <!-- 3 Numbered Sections of KPI Metric Cards -->
+        <div class="kpi-sections-row">
+            <!-- 01 Execution Overview -->
+            <div class="kpi-group">
+                <div class="section-heading">
+                    <span class="sec-num">01</span>
+                    <span class="sec-title">Execution Overview</span>
+                    <div class="sec-line"></div>
+                </div>
+                <div class="kpi-cards-grid">
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-red">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num" id="kpi-total">0</div>
+                            <div class="kpi-title">TOTAL TESTS</div>
+                        </div>
+                    </div>
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-green">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num color-success" id="kpi-success">--</div>
+                            <div class="kpi-title">SUCCESS RATE</div>
+                        </div>
+                    </div>
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-green">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num color-success" id="kpi-chain">VALID</div>
+                            <div class="kpi-title">CHAIN INTEGRITY</div>
+                        </div>
+                    </div>
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-amber">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num" id="kpi-skipped">0</div>
+                            <div class="kpi-title">SKIPPED RUNS</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 02 Revocation Performance -->
+            <div class="kpi-group">
+                <div class="section-heading">
+                    <span class="sec-num">02</span>
+                    <span class="sec-title">Revocation Performance</span>
+                    <div class="sec-line"></div>
+                </div>
+                <div class="kpi-cards-grid">
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-red">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="14" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="14" x2="15" y2="11"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num" id="kpi-latency">-- ms</div>
+                            <div class="kpi-title">PER-CHANNEL REVOCATION LATENCY</div>
+                        </div>
+                    </div>
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-red">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 14 14"/><path d="M16.24 7.76l2.12-2.12"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num" id="kpi-total-rev-time">-- ms</div>
+                            <div class="kpi-title">TOTAL REVOCATION TIME (UNTIL LAST REVOKED)</div>
+                        </div>
+                    </div>
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-pink">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num" id="kpi-cycle-duration">-- ms</div>
+                            <div class="kpi-title">CYCLE DURATION</div>
+                        </div>
+                    </div>
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-orange">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num" id="kpi-retries">0 of 0</div>
+                            <div class="kpi-title">RUNS NEEDING RETRIES</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 03 Security & Resource Exposure -->
+            <div class="kpi-group">
+                <div class="section-heading">
+                    <span class="sec-num">03</span>
+                    <span class="sec-title">Security & Resource Exposure</span>
+                    <div class="sec-line"></div>
+                </div>
+                <div class="kpi-cards-grid">
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-red">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num" id="kpi-leaked-ops">0</div>
+                            <div class="kpi-title">LEAKED OPERATIONS</div>
+                        </div>
+                    </div>
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-coral">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num" id="kpi-runs-with-leaks">0 of 0</div>
+                            <div class="kpi-title">RUNS WITH LEAKS</div>
+                        </div>
+                    </div>
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-orange">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num" id="kpi-exposed-runs">0 of 0</div>
+                            <div class="kpi-title">EXPOSED RUNS</div>
+                        </div>
+                    </div>
+                    <div class="kpi-tile">
+                        <div class="kpi-icon-wrap icon-blue">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-num" id="kpi-llm-calls">0 / 1000</div>
+                            <div class="kpi-title" id="kpi-llm-tokens">LLM CALLS (0 TOKENS TODAY)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 1: (1) Simulation Settings & Batch and (2) Live Revocation Console & Tiles -->
+        <div class="panels-grid">
             <div class="panel">
-                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">
-                    <h3 style="margin: 0; color: var(--neon-purple); font-size: 16px;">⚙️ Simulation Settings & Batch</h3>
+                <div class="panel-header">
+                    <h3 class="panel-title">(1) Simulation Settings &amp; Batch</h3>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 12px; color: var(--text-muted);">Scheduler:</span>
-                        <span id="dash-sched-badge" class="badge" style="background:#333; color:#aaa; font-size: 10px;">OFF</span>
+                        <span style="font-size: 11px; color: var(--text-muted); font-weight:600;">Scheduler:</span>
+                        <span id="dash-sched-badge" class="badge neutral" style="font-size: 10px;">OFF</span>
                     </div>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
-                    <label>Delay Min (ms): <input type="number" id="sim-delay-min" value="50" style="width:100%; margin-top:4px;" /></label>
-                    <label>Delay Max (ms): <input type="number" id="sim-delay-max" value="200" style="width:100%; margin-top:4px;" /></label>
-                    <label>Revoke Fail Prob: <input type="number" step="0.05" id="sim-fail-prob" value="0.10" style="width:100%; margin-top:4px;" /></label>
-                    <label>IAM Fail Prob: <input type="number" step="0.05" id="sim-iam-prob" value="0.15" style="width:100%; margin-top:4px;" /></label>
-                    <label>In-Flight Leak Prob: <input type="number" step="0.05" id="sim-leak-prob" value="0.20" style="width:100%; margin-top:4px;" /></label>
-                    <label>Agent Mode: 
-                        <select id="sim-agent-mode" style="width:100%; margin-top:4px; background:#18181b; color:#fff; border:1px solid var(--border); border-radius:4px; padding:6px; font-size:12px;">
+                    <label style="font-weight:600; color:var(--text-secondary);">Delay Min (ms): <input type="number" id="sim-delay-min" value="50" style="width:100%; margin-top:4px;" /></label>
+                    <label style="font-weight:600; color:var(--text-secondary);">Delay Max (ms): <input type="number" id="sim-delay-max" value="200" style="width:100%; margin-top:4px;" /></label>
+                    <label style="font-weight:600; color:var(--text-secondary);">Revoke Fail Prob: <input type="number" step="0.05" id="sim-fail-prob" value="0.10" style="width:100%; margin-top:4px;" /></label>
+                    <label style="font-weight:600; color:var(--text-secondary);">IAM Fail Prob: <input type="number" step="0.05" id="sim-iam-prob" value="0.15" style="width:100%; margin-top:4px;" /></label>
+                    <label style="font-weight:600; color:var(--text-secondary);">In-Flight Leak Prob: <input type="number" step="0.05" id="sim-leak-prob" value="0.20" style="width:100%; margin-top:4px;" /></label>
+                    <label style="font-weight:600; color:var(--text-secondary);">Agent Mode: 
+                        <select id="sim-agent-mode" style="width:100%; margin-top:4px;">
                             <option value="Gemini">Gemini</option>
                             <option value="Scripted">Scripted</option>
                         </select>
                     </label>
                 </div>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button class="secondary" onclick="window.saveSettings()" style="flex: 1; font-size: 12px;">Save Settings</button>
+                    <button class="btn-secondary" onclick="window.saveSettings()" style="flex: 1;">Save Settings</button>
                 </div>
-                <hr style="border: 0; border-top: 1px solid var(--border); margin: 15px 0;">
+                <hr style="border: 0; border-top: 1px solid var(--border-light); margin: 15px 0;">
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <input type="number" id="n-tests-input" value="5" min="1" max="50" style="width: 80px;" title="N cycles (max 50)" />
-                    <button id="run-n-btn" onclick="window.runNTests()" style="flex: 1; font-size: 13px;">Run N Tests</button>
+                    <button class="btn-primary" id="run-n-btn" onclick="window.runNTests()" style="flex: 1;">Run N Tests</button>
                 </div>
             </div>
             
             <div class="panel">
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 15px;">
-                    <h3 style="margin: 0; color: var(--neon-blue); font-size: 16px;">(2) Live Revocation Console & Tiles</h3>
-                    <span id="console-phase-badge" class="badge" style="background:#222; font-size:10px;">READY</span>
+                <div class="panel-header">
+                    <h3 class="panel-title">(2) Live Revocation Console &amp; Tiles</h3>
+                    <span id="console-phase-badge" class="badge neutral">READY</span>
                 </div>
                 <div id="channel-tiles" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px;">
-                    <div id="tile-api_key" class="channel-tile" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px; padding: 8px; text-align: center; font-size: 11px;">
-                        <div style="color:var(--text-muted); font-weight:bold;">API_KEY</div>
-                        <div class="tile-status" style="margin-top:4px; font-weight:bold; color:#777;">IDLE</div>
+                    <div id="tile-api_key" class="channel-tile">
+                        <div style="color:var(--text-muted); font-weight:700; font-size:10px;">API_KEY</div>
+                        <div class="tile-status" style="margin-top:4px; font-weight:800; font-size:11px; color:var(--text-muted);">IDLE</div>
                     </div>
-                    <div id="tile-session_token" class="channel-tile" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px; padding: 8px; text-align: center; font-size: 11px;">
-                        <div style="color:var(--text-muted); font-weight:bold;">SESSION</div>
-                        <div class="tile-status" style="margin-top:4px; font-weight:bold; color:#777;">IDLE</div>
+                    <div id="tile-session_token" class="channel-tile">
+                        <div style="color:var(--text-muted); font-weight:700; font-size:10px;">SESSION</div>
+                        <div class="tile-status" style="margin-top:4px; font-weight:800; font-size:11px; color:var(--text-muted);">IDLE</div>
                     </div>
-                    <div id="tile-iam_role" class="channel-tile" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px; padding: 8px; text-align: center; font-size: 11px;">
-                        <div style="color:var(--text-muted); font-weight:bold;">IAM_ROLE</div>
-                        <div class="tile-status" style="margin-top:4px; font-weight:bold; color:#777;">IDLE</div>
+                    <div id="tile-iam_role" class="channel-tile">
+                        <div style="color:var(--text-muted); font-weight:700; font-size:10px;">IAM_ROLE</div>
+                        <div class="tile-status" style="margin-top:4px; font-weight:800; font-size:11px; color:var(--text-muted);">IDLE</div>
                     </div>
-                    <div id="tile-network" class="channel-tile" style="background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px; padding: 8px; text-align: center; font-size: 10px;">
-                        <div style="color:var(--text-muted); font-weight:bold; font-size:9px;">NETWORK (External Tool/API)</div>
-                        <div class="tile-status" style="margin-top:4px; font-weight:bold; color:#777;">IDLE</div>
+                    <div id="tile-network" class="channel-tile">
+                        <div style="color:var(--text-muted); font-weight:700; font-size:9.5px;">NETWORK (External Tool/API)</div>
+                        <div class="tile-status" style="margin-top:4px; font-weight:800; font-size:11px; color:var(--text-muted);">IDLE</div>
                     </div>
                 </div>
-                <div id="live-console" style="height: 120px; overflow-y: auto; background: #0c0c0e; padding: 10px; font-family: monospace; font-size: 11px; border: 1px solid var(--border); border-radius: 6px; line-height: 1.5; color: #a1a1aa;">
+                <div id="live-console">
                     <div>[READY] Press 'Initiate Shutdown' to execute a live verified cycle.</div>
                 </div>
             </div>
         </div>
-        <div class="dashboard-grid" style="margin-bottom: 25px;">
+
+        <!-- Row 2: (3) Per-Channel Latency Distribution and (4) 2x2 Outcome Matrix -->
+        <div class="panels-grid">
+            <!-- (3) Latency Distribution -->
             <div class="panel">
-                <h3 style="margin-top:0; font-size: 15px; color: var(--accent);">(3) Per-Channel Latency Distribution</h3>
+                <div class="panel-header">
+                    <h3 class="panel-title">(3) Per-Channel Latency Distribution</h3>
+                </div>
                 <div id="latency-container" style="height: 220px; position: relative;">
                     <canvas id="latencyChart"></canvas>
-                    <div id="latency-empty" class="empty-state" style="display:none; position:absolute; inset:0; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; text-align:center;">
+                    <div id="latency-empty" class="empty-state" style="display:none; position:absolute; inset:0;">
                         No data yet
                     </div>
                 </div>
             </div>
+
+            <!-- (4) 2x2 Outcome Matrix -->
             <div class="panel">
-                <h3 style="margin-top:0; font-size: 15px; color: var(--primary);">(4) 2x2 Outcome Matrix (Revocation vs In-Flight Leaks)</h3>
+                <div class="panel-header">
+                    <h3 class="panel-title">(4) 2x2 Outcome Matrix (Revocation vs In-Flight Leaks)</h3>
+                </div>
                 <div id="matrix-container" style="height: 220px; position: relative;">
-                    <div id="matrix-grid-view" style="display:grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; height: 100%;">
-                        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 6px; padding: 10px; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-                            <span style="font-size: 11px; color: var(--success); font-weight:bold;">Revoke PASS / No Leak</span>
-                            <span id="mat-pass-no-leak" style="font-size: 24px; font-weight:800; color: #fff; margin-top:4px;">0</span>
+                    <div id="matrix-grid-view" class="matrix-quadrants">
+                        <div class="matrix-quadrant quadrant-pass-no-leak">
+                            <span class="quadrant-label">Revoke PASS / No Leak</span>
+                            <span class="quadrant-val" id="mat-pass-no-leak">0</span>
                         </div>
-                        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 10px; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-                            <span style="font-size: 11px; color: var(--warning); font-weight:bold;">Revoke PASS / Leak Detected</span>
-                            <span id="mat-pass-with-leak" style="font-size: 24px; font-weight:800; color: #fff; margin-top:4px;">0</span>
+                        <div class="matrix-quadrant quadrant-pass-leak">
+                            <span class="quadrant-label">Revoke PASS / Leak Detected</span>
+                            <span class="quadrant-val" id="mat-pass-with-leak">0</span>
                         </div>
-                        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 6px; padding: 10px; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-                            <span style="font-size: 11px; color: var(--warning); font-weight:bold;">Revoke FAIL / No Leak</span>
-                            <span id="mat-fail-no-leak" style="font-size: 24px; font-weight:800; color: #fff; margin-top:4px;">0</span>
+                        <div class="matrix-quadrant quadrant-fail-no-leak">
+                            <span class="quadrant-label">Revoke FAIL / No Leak</span>
+                            <span class="quadrant-val" id="mat-fail-no-leak">0</span>
                         </div>
-                        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; padding: 10px; display:flex; flex-direction:column; justify-content:center; align-items:center;">
-                            <span style="font-size: 11px; color: var(--danger); font-weight:bold;">Revoke FAIL / Leak Detected</span>
-                            <span id="mat-fail-with-leak" style="font-size: 24px; font-weight:800; color: #fff; margin-top:4px;">0</span>
+                        <div class="matrix-quadrant quadrant-fail-leak">
+                            <span class="quadrant-label">Revoke FAIL / Leak Detected</span>
+                            <span class="quadrant-val" id="mat-fail-with-leak">0</span>
                         </div>
                     </div>
-                    <div id="matrix-empty" class="empty-state" style="display:none; position:absolute; inset:0; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; background:var(--bg-panel); text-align:center;">
+                    <div id="matrix-empty" class="empty-state" style="display:none; position:absolute; inset:0;">
                         No data yet
                     </div>
                 </div>
             </div>
         </div>
-        <div class="dashboard-grid" style="margin-bottom: 25px;">
+
+        <!-- Row 3: (5) In-Flight Leak Timeline and (6) Success Rate & Latency Trend -->
+        <div class="panels-grid">
+            <!-- (5) In-Flight Leak Timeline -->
             <div class="panel">
-                <h3 style="margin-top:0; font-size: 15px; color: #f43f5e;">(5) In-Flight Leak Timeline (Relative to Shutdown)</h3>
+                <div class="panel-header">
+                    <h3 class="panel-title">(5) In-Flight Leak Timeline (Relative to Shutdown)</h3>
+                </div>
                 <div id="timeline-container" style="height: 220px; position: relative;">
                     <canvas id="timelineChart"></canvas>
-                    <div id="timeline-empty" class="empty-state" style="display:none; position:absolute; inset:0; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; text-align:center;">
+                    <div id="timeline-empty" class="empty-state" style="display:none; position:absolute; inset:0;">
                         No data yet
                     </div>
                 </div>
             </div>
+
+            <!-- (6) Success Rate & Latency Trend -->
             <div class="panel">
-                <h3 style="margin-top:0; font-size: 15px; color: #38bdf8;">(6) Success Rate & Latency Trend per Test Run</h3>
+                <div class="panel-header">
+                    <h3 class="panel-title">(6) Success Rate & Latency Trend per Test Run</h3>
+                </div>
                 <div id="trend-container" style="height: 220px; position: relative;">
                     <canvas id="trendChart"></canvas>
-                    <div id="trend-empty" class="empty-state" style="display:none; position:absolute; inset:0; align-items:center; justify-content:center; color:var(--text-muted); font-size:13px; text-align:center;">
+                    <div id="trend-empty" class="empty-state" style="display:none; position:absolute; inset:0;">
                         No data yet
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="dashboard-grid" style="margin-bottom: 25px;">
-            <div class="panel">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
-                    <h3 style="margin:0; font-size: 15px; color: var(--success);">(7) Attestation Explorer</h3>
-                    <div style="display:flex; gap: 8px;">
-                        <button id="verify-chain-btn" class="secondary" onclick="window.verifyChain()" style="font-size: 11px; padding: 4px 10px;">Verify Chain</button>
-                        <button id="export-report-btn" class="secondary" onclick="window.exportReport()" style="font-size: 11px; padding: 4px 10px;">Export Report</button>
+        <!-- Panel: Agent Runtime Status & Credentials -->
+        <div class="panel" style="margin-bottom: 25px;">
+            <div class="panel-header" style="flex-wrap:wrap; gap:10px;">
+                <h3 class="panel-title">(7) Agent Runtime Status & Credentials</h3>
+                <div id="dash-agent-badges" style="display:flex; gap:10px; font-size:11.5px; flex-wrap:wrap;">
+                    <div class="badge neutral" style="padding:4px 8px;">
+                        <span>Agent:</span> <strong id="dash-agent-name">Sandbox Agent</strong> (<code id="dash-agent-id">--</code>)
+                    </div>
+                    <div class="badge success" style="padding:4px 8px;">
+                        <span>Status:</span> <span id="dash-agent-status">ACTIVE</span>
+                    </div>
+                    <div class="badge neutral" style="padding:4px 8px;">
+                        <span>Mode:</span> <strong id="dash-agent-mode">Gemini</strong>
+                    </div>
+                    <div class="badge neutral" style="padding:4px 8px;">
+                        <span>Model:</span> <code id="dash-agent-model">gemini-3.5-flash-lite</code>
+                    </div>
+                    <div class="badge success" id="dash-agent-key" style="padding:4px 8px;">
+                        configured
                     </div>
                 </div>
-                <div id="attestation-explorer" style="font-family: monospace; font-size: 11px; background: #0c0c0e; border: 1px solid var(--border); border-radius: 6px; padding: 12px; min-height: 140px; overflow-y: auto;">
-                    <div class="empty-state" style="padding: 30px;">No data yet</div>
-                </div>
             </div>
-            <div class="panel">
-                <h3 style="margin-top:0; font-size: 15px; color: var(--warning);">(8) KILLBENCH Comparison</h3>
-                <div id="killbench-data" style="font-size: 12px; background: #0c0c0e; border: 1px solid var(--border); border-radius: 6px; padding: 15px; min-height: 140px; display:flex; flex-direction:column; justify-content:center;">
-                    <div class="empty-state">No data yet</div>
-                </div>
+            <div style="overflow-x:auto;">
+                <table id="dash-creds-table">
+                    <thead>
+                        <tr>
+                            <th>Channel</th>
+                            <th>Channel Type</th>
+                            <th>Masked Value</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dash-creds-tbody">
+                        <tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:15px;">Loading credentials...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
+        <!-- Panel: Test History Table -->
         <div class="panel">
-            <h3 style="margin-top:0; font-size: 16px; color: var(--text-main); margin-bottom: 15px;">(9) Test History Table</h3>
+            <div class="panel-header">
+                <h3 class="panel-title">(8) Test History Table</h3>
+            </div>
             <div style="overflow-x: auto;">
-                <table id="history-table" style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                <table id="history-table">
                     <thead>
-                        <tr style="border-bottom: 1px solid var(--border); color: var(--text-muted); text-align: left;">
-                            <th style="padding: 8px;">Test ID</th>
-                            <th style="padding: 8px;">Trigger Time (Local)</th>
-                            <th style="padding: 8px;">Triggered By</th>
-                            <th style="padding: 8px;">Mode</th>
-                            <th style="padding: 8px;">Strategy</th>
-                            <th style="padding: 8px;">Final State</th>
-                            <th style="padding: 8px;">Residual Risk</th>
-                            <th style="padding: 8px;">Leaks</th>
+                        <tr>
+                            <th>Test ID</th>
+                            <th>Trigger Time (Local)</th>
+                            <th>Triggered By</th>
+                            <th>Mode</th>
+                            <th>Strategy</th>
+                            <th>Final State</th>
+                            <th>Residual Risk</th>
+                            <th>Leaks</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -260,13 +432,15 @@ window.render_dashboard = async function(container) {
             </div>
         </div>
     `;
-    
+
     window.addEventListener('ws_shutdown_progress', window.handleWsProgress);
     window.addEventListener('ws_credential_update', window.handleWsCredUpdate);
     window.addEventListener('ws_batch_progress', window.handleWsBatchProgress);
     window.addEventListener('ws_shutdown_complete', window.handleWsShutdownComplete);
 
     await window.loadInitialSettings();
+    const toggle = document.getElementById('include-scripted-toggle');
+    if (toggle) toggle.checked = State.includeScripted;
     await window.refreshDashboard();
 };
 
@@ -442,97 +616,90 @@ window.toggleScheduler = async function(enabled) {
     }
 };
 
-window.verifyChain = async function() {
-    try {
-        const res = await apiCall('/api/shutdown/verify');
-        const chainEl = document.getElementById('kpi-chain');
-        if(chainEl) {
-            chainEl.textContent = res.status.toUpperCase();
-            chainEl.style.color = res.status === 'valid' ? 'var(--success)' : 'var(--danger)';
-        }
-        alert(res.message);
-    } catch(e) {
-        alert("Verification failed: " + (e.message || JSON.stringify(e)));
-    }
-};
-
-window.exportReport = async function() {
-    try {
-        const history = await apiCall('/api/shutdown/history');
-        if(!history || history.length === 0) {
-            return alert("No shutdown records available to export.");
-        }
-        const latestId = history[0].id;
-        window.open(`/api/audit/export/${latestId}`, '_blank');
-    } catch(e) {
-        alert("Export failed: " + (e.message || JSON.stringify(e)));
-    }
-};
+let _isRefreshingDashboard = false;
 
 window.refreshDashboard = async function() {
+    if (_isRefreshingDashboard) return;
+    _isRefreshingDashboard = true;
+
     try {
-        const includeScripted = document.getElementById('include-scripted-toggle')?.checked || false;
+        const includeScripted = State.includeScripted;
+        const toggle = document.getElementById('include-scripted-toggle');
+        if (toggle && toggle.checked !== includeScripted) toggle.checked = includeScripted;
         const qParam = includeScripted ? '?include_scripted=true' : '?include_scripted=false';
 
-        const [summary, history, verifyRes, killbench, entries] = await Promise.all([
+        const [summary, history, verifyRes, agent, creds, agentStatus] = await Promise.all([
             apiCall(`/api/analytics/summary${qParam}`).catch(() => null),
-            apiCall(`/api/shutdown/history${qParam}`).catch(() => []),
+            apiCall(`/api/shutdown/history${qParam}`).catch(() => null),
             apiCall('/api/shutdown/verify').catch(() => null),
-            apiCall(`/api/analytics/killbench-comparison${qParam}`).catch(() => null),
-            apiCall('/api/audit/entries').catch(() => [])
+            apiCall('/api/agent').catch(() => null),
+            apiCall('/api/agent/credentials').catch(() => null),
+            apiCall('/api/agent/status').catch(() => ({}))
         ]);
 
-        const hasData = summary && summary.total_shutdowns > 0;
+        const hasSummary = summary !== null && summary !== undefined;
+        const totalRuns = hasSummary ? (summary.total_shutdowns || 0) : 0;
+        const hasData = hasSummary && totalRuns > 0;
 
-        if(document.getElementById('kpi-total')) {
-            document.getElementById('kpi-total').textContent = summary ? (summary.total_shutdowns || 0) : 0;
+        if (document.getElementById('kpi-total')) {
+            document.getElementById('kpi-total').textContent = hasSummary ? totalRuns : '--';
         }
-        if(document.getElementById('kpi-success')) {
+        if (document.getElementById('kpi-success')) {
             document.getElementById('kpi-success').textContent = hasData ? `${summary.success_rate}%` : '--';
         }
-        if(document.getElementById('kpi-latency')) {
+        if (document.getElementById('kpi-latency')) {
             document.getElementById('kpi-latency').textContent = hasData ? `${summary.mean_revocation_latency_ms} ms` : '-- ms';
         }
-        if(document.getElementById('kpi-total-rev-time')) {
+        if (document.getElementById('kpi-total-rev-time')) {
             document.getElementById('kpi-total-rev-time').textContent = hasData ? `${summary.mean_total_revocation_ms} ms` : '-- ms';
         }
-        if(document.getElementById('kpi-cycle-duration')) {
+        if (document.getElementById('kpi-cycle-duration')) {
             document.getElementById('kpi-cycle-duration').textContent = hasData ? `${summary.mean_cycle_duration_ms} ms` : '-- ms';
         }
-        if(document.getElementById('kpi-leaked-ops')) {
-            document.getElementById('kpi-leaked-ops').textContent = summary ? (summary.leaked_operations || 0) : 0;
+        if (document.getElementById('kpi-leaked-ops')) {
+            document.getElementById('kpi-leaked-ops').textContent = hasSummary ? (summary.leaked_operations || 0) : '--';
         }
-        if(document.getElementById('kpi-runs-with-leaks')) {
-            document.getElementById('kpi-runs-with-leaks').textContent = summary ? (summary.runs_with_leaks_kpi || '0 of 0') : '0 of 0';
+        if (document.getElementById('kpi-runs-with-leaks')) {
+            document.getElementById('kpi-runs-with-leaks').textContent = hasSummary ? (summary.runs_with_leaks_kpi || `${summary.runs_with_leaks || 0} of ${totalRuns}`) : '--';
         }
-        if(document.getElementById('kpi-exposed-runs')) {
-            document.getElementById('kpi-exposed-runs').textContent = summary ? (summary.exposed_runs_kpi || summary.runs_with_in_flight_kpi || '0 of 0') : '0 of 0';
+        if (document.getElementById('kpi-exposed-runs')) {
+            document.getElementById('kpi-exposed-runs').textContent = hasSummary ? (summary.exposed_runs_kpi || summary.runs_with_in_flight_kpi || `${summary.exposed_runs || 0} of ${totalRuns}`) : '--';
         }
-        if(document.getElementById('kpi-retries')) {
-            document.getElementById('kpi-retries').textContent = summary ? (summary.runs_needing_retries_kpi || '0 of 0') : '0 of 0';
+        if (document.getElementById('kpi-retries')) {
+            document.getElementById('kpi-retries').textContent = hasSummary ? (summary.runs_needing_retries_kpi || `${summary.runs_needing_retries || 0} of ${totalRuns}`) : '--';
         }
-        if(document.getElementById('kpi-chain')) {
+        if (document.getElementById('kpi-chain')) {
             const chainEl = document.getElementById('kpi-chain');
             const status = verifyRes && verifyRes.status ? verifyRes.status.toUpperCase() : (hasData ? 'VALID' : '--');
             chainEl.textContent = status;
             chainEl.style.color = status === 'VALID' ? 'var(--success)' : (status === '--' ? 'var(--text-muted)' : 'var(--danger)');
         }
-        if(document.getElementById('kpi-skipped')) {
-            document.getElementById('kpi-skipped').textContent = summary ? (summary.skipped_runs || 0) : 0;
+        if (document.getElementById('kpi-skipped')) {
+            document.getElementById('kpi-skipped').textContent = hasSummary ? (summary.skipped_runs || 0) : '--';
         }
-        if(document.getElementById('kpi-llm-calls')) {
-            const calls = summary ? (summary.calls_used_today || 0) : 0;
-            document.getElementById('kpi-llm-calls').textContent = `${calls} / 1000`;
+        if (document.getElementById('kpi-llm-calls')) {
+            const calls = hasSummary ? (summary.calls_used_today || 0) : '--';
+            document.getElementById('kpi-llm-calls').textContent = hasSummary ? `${calls} / 1000` : '--';
+            if (document.getElementById('kpi-llm-tokens')) {
+                const tokTotal = (summary.tokens_today && summary.tokens_today.total_tokens !== undefined) ? summary.tokens_today.total_tokens : (summary.total_tokens_total || 0);
+                document.getElementById('kpi-llm-tokens').textContent = `LLM Calls (${tokTotal} tok today)`;
+            }
         }
 
         const latEmpty = document.getElementById('latency-empty');
         const latCanvas = document.getElementById('latencyChart');
-        if(!hasData || !summary.channel_latencies || Object.keys(summary.channel_latencies).length === 0) {
-            if(latEmpty) { latEmpty.textContent = "No data yet"; latEmpty.style.display = 'flex'; }
-            if(latCanvas) latCanvas.style.display = 'none';
+        if (!hasSummary) {
+            if (latEmpty) { latEmpty.textContent = "Channel latency data temporarily unavailable."; latEmpty.style.display = 'flex'; }
+            if (latCanvas) latCanvas.style.display = 'none';
+        } else if (!hasData) {
+            if (latEmpty) { latEmpty.textContent = "No runs recorded yet. Initiate a shutdown or batch test to view channel latencies."; latEmpty.style.display = 'flex'; }
+            if (latCanvas) latCanvas.style.display = 'none';
+        } else if (!summary.channel_latencies || Object.keys(summary.channel_latencies).length === 0) {
+            if (latEmpty) { latEmpty.textContent = "No channel revocation records logged."; latEmpty.style.display = 'flex'; }
+            if (latCanvas) latCanvas.style.display = 'none';
         } else {
-            if(latEmpty) latEmpty.style.display = 'none';
-            if(latCanvas) latCanvas.style.display = 'block';
+            if (latEmpty) latEmpty.style.display = 'none';
+            if (latCanvas) latCanvas.style.display = 'block';
             
             const channels = Object.keys(summary.channel_latencies);
             const averages = channels.map(ch => {
@@ -540,7 +707,7 @@ window.refreshDashboard = async function() {
                 return arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : 0;
             });
 
-            if(window.dashboardCharts.latency) window.dashboardCharts.latency.destroy();
+            if (window.dashboardCharts.latency) window.dashboardCharts.latency.destroy();
             window.dashboardCharts.latency = new Chart(latCanvas.getContext('2d'), {
                 type: 'bar',
                 data: {
@@ -548,7 +715,7 @@ window.refreshDashboard = async function() {
                     datasets: [{
                         label: 'Mean Latency (ms)',
                         data: averages,
-                        backgroundColor: '#06b6d4',
+                        backgroundColor: '#ea384c',
                         borderRadius: 4
                     }]
                 },
@@ -556,8 +723,8 @@ window.refreshDashboard = async function() {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#a1a1aa' } },
-                        x: { ticks: { color: '#a1a1aa' }, grid: { display: false } }
+                        y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { color: '#64748b' } },
+                        x: { ticks: { color: '#64748b' }, grid: { display: false } }
                     },
                     plugins: { legend: { display: false } }
                 }
@@ -566,27 +733,41 @@ window.refreshDashboard = async function() {
 
         const matEmpty = document.getElementById('matrix-empty');
         const matGrid = document.getElementById('matrix-grid-view');
-        if(!hasData) {
-            if(matEmpty) { matEmpty.textContent = "No data yet"; matEmpty.style.display = 'flex'; }
-            if(matGrid) matGrid.style.display = 'none';
+        if (!hasSummary) {
+            if (matEmpty) { matEmpty.textContent = "Outcome matrix temporarily unavailable."; matEmpty.style.display = 'flex'; }
+            if (matGrid) matGrid.style.display = 'none';
+        } else if (!hasData) {
+            if (matEmpty) { matEmpty.textContent = "No runs recorded yet."; matEmpty.style.display = 'flex'; }
+            if (matGrid) matGrid.style.display = 'none';
         } else {
-            if(matEmpty) matEmpty.style.display = 'none';
-            if(matGrid) matGrid.style.display = 'grid';
+            if (matEmpty) matEmpty.style.display = 'none';
+            if (matGrid) matGrid.style.display = 'grid';
             const m = summary.outcome_matrix_2x2 || { pass_no_leak: 0, pass_with_leak: 0, fail_no_leak: 0, fail_with_leak: 0 };
-            if(document.getElementById('mat-pass-no-leak')) document.getElementById('mat-pass-no-leak').textContent = m.pass_no_leak;
-            if(document.getElementById('mat-pass-with-leak')) document.getElementById('mat-pass-with-leak').textContent = m.pass_with_leak;
-            if(document.getElementById('mat-fail-no-leak')) document.getElementById('mat-fail-no-leak').textContent = m.fail_no_leak;
-            if(document.getElementById('mat-fail-with-leak')) document.getElementById('mat-fail-with-leak').textContent = m.fail_with_leak;
+            if (document.getElementById('mat-pass-no-leak')) document.getElementById('mat-pass-no-leak').textContent = m.pass_no_leak;
+            if (document.getElementById('mat-pass-with-leak')) document.getElementById('mat-pass-with-leak').textContent = m.pass_with_leak;
+            if (document.getElementById('mat-fail-no-leak')) document.getElementById('mat-fail-no-leak').textContent = m.fail_no_leak;
+            if (document.getElementById('mat-fail-with-leak')) document.getElementById('mat-fail-with-leak').textContent = m.fail_with_leak;
         }
 
         const timeEmpty = document.getElementById('timeline-empty');
         const timeCanvas = document.getElementById('timelineChart');
-        if(!hasData || !summary.in_flight_leaks_timeline || summary.in_flight_leaks_timeline.length === 0) {
-            if(timeEmpty) { timeEmpty.textContent = "No data yet"; timeEmpty.style.display = 'flex'; }
-            if(timeCanvas) timeCanvas.style.display = 'none';
+        const exposedCount = hasSummary ? (summary.exposed_runs !== undefined ? summary.exposed_runs : (summary.runs_with_in_flight || 0)) : 0;
+
+        if (!hasSummary) {
+            if (timeEmpty) { timeEmpty.textContent = "Timeline data temporarily unavailable."; timeEmpty.style.display = 'flex'; }
+            if (timeCanvas) timeCanvas.style.display = 'none';
+        } else if (!hasData) {
+            if (timeEmpty) { timeEmpty.textContent = "No runs recorded yet."; timeEmpty.style.display = 'flex'; }
+            if (timeCanvas) timeCanvas.style.display = 'none';
+        } else if (exposedCount === 0) {
+            if (timeEmpty) { timeEmpty.textContent = "No exposed runs (0 runs had active in-flight operations at kill cutoff)."; timeEmpty.style.display = 'flex'; }
+            if (timeCanvas) timeCanvas.style.display = 'none';
+        } else if (!summary.in_flight_leaks_timeline || summary.in_flight_leaks_timeline.length === 0) {
+            if (timeEmpty) { timeEmpty.textContent = "No in-flight leaks detected across all exposed runs. All in-flight operations were successfully contained."; timeEmpty.style.display = 'flex'; }
+            if (timeCanvas) timeCanvas.style.display = 'none';
         } else {
-            if(timeEmpty) timeEmpty.style.display = 'none';
-            if(timeCanvas) timeCanvas.style.display = 'block';
+            if (timeEmpty) timeEmpty.style.display = 'none';
+            if (timeCanvas) timeCanvas.style.display = 'block';
 
             const leakPoints = summary.in_flight_leaks_timeline.map((item, idx) => ({
                 x: item.relative_ms,
@@ -594,7 +775,7 @@ window.refreshDashboard = async function() {
                 label: `${item.operation_type} (${item.op_id})`
             }));
 
-            if(window.dashboardCharts.timeline) window.dashboardCharts.timeline.destroy();
+            if (window.dashboardCharts.timeline) window.dashboardCharts.timeline.destroy();
             window.dashboardCharts.timeline = new Chart(timeCanvas.getContext('2d'), {
                 type: 'scatter',
                 data: {
@@ -602,8 +783,8 @@ window.refreshDashboard = async function() {
                         {
                             label: 'Leaked Operations (Post-Shutdown)',
                             data: leakPoints,
-                            backgroundColor: '#f43f5e',
-                            borderColor: '#e11d48',
+                            backgroundColor: '#ea384c',
+                            borderColor: '#dc2626',
                             pointRadius: 6,
                             pointHoverRadius: 8
                         }
@@ -614,18 +795,18 @@ window.refreshDashboard = async function() {
                     maintainAspectRatio: false,
                     scales: {
                         x: {
-                            title: { display: true, text: 'Time Relative to Shutdown (ms)', color: '#a1a1aa' },
-                            grid: { color: 'rgba(255,255,255,0.05)' },
-                            ticks: { color: '#a1a1aa' }
+                            title: { display: true, text: 'Time Relative to Shutdown (ms)', color: '#64748b' },
+                            grid: { color: '#f1f5f9' },
+                            ticks: { color: '#64748b' }
                         },
                         y: {
-                            title: { display: true, text: 'Operation Sequence', color: '#a1a1aa' },
-                            grid: { color: 'rgba(255,255,255,0.05)' },
-                            ticks: { color: '#a1a1aa', stepSize: 1 }
+                            title: { display: true, text: 'Operation Sequence', color: '#64748b' },
+                            grid: { color: '#f1f5f9' },
+                            ticks: { color: '#64748b', stepSize: 1 }
                         }
                     },
                     plugins: {
-                        legend: { labels: { color: '#e4e4e7' } },
+                        legend: { labels: { color: '#0f172a' } },
                         tooltip: {
                             callbacks: {
                                 label: (ctx) => `${ctx.raw.label}: completed +${ctx.raw.x}ms after shutdown`
@@ -638,19 +819,22 @@ window.refreshDashboard = async function() {
 
         const trendEmpty = document.getElementById('trend-empty');
         const trendCanvas = document.getElementById('trendChart');
-        if(!hasData || !summary.runs_trend || summary.runs_trend.length === 0) {
-            if(trendEmpty) { trendEmpty.textContent = "No data yet"; trendEmpty.style.display = 'flex'; }
-            if(trendCanvas) trendCanvas.style.display = 'none';
+        if (!hasSummary) {
+            if (trendEmpty) { trendEmpty.textContent = "Trend data temporarily unavailable."; trendEmpty.style.display = 'flex'; }
+            if (trendCanvas) trendCanvas.style.display = 'none';
+        } else if (!hasData || !summary.runs_trend || summary.runs_trend.length === 0) {
+            if (trendEmpty) { trendEmpty.textContent = "No test runs recorded yet."; trendEmpty.style.display = 'flex'; }
+            if (trendCanvas) trendCanvas.style.display = 'none';
         } else {
-            if(trendEmpty) trendEmpty.style.display = 'none';
-            if(trendCanvas) trendCanvas.style.display = 'block';
+            if (trendEmpty) trendEmpty.style.display = 'none';
+            if (trendCanvas) trendCanvas.style.display = 'block';
 
             const runs = summary.runs_trend;
             const labels = runs.map(r => `Run ${r.run_index}`);
             const latencyData = runs.map(r => r.mean_latency_ms);
             const successData = runs.map(r => r.success * 100);
 
-            if(window.dashboardCharts.trend) window.dashboardCharts.trend.destroy();
+            if (window.dashboardCharts.trend) window.dashboardCharts.trend.destroy();
             window.dashboardCharts.trend = new Chart(trendCanvas.getContext('2d'), {
                 type: 'line',
                 data: {
@@ -659,8 +843,10 @@ window.refreshDashboard = async function() {
                         {
                             label: 'Mean Latency (ms)',
                             data: latencyData,
-                            borderColor: '#38bdf8',
-                            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                            borderColor: '#ea384c',
+                            backgroundColor: 'rgba(234, 56, 76, 0.08)',
+                            pointBackgroundColor: '#ea384c',
+                            pointBorderColor: '#ea384c',
                             yAxisID: 'y',
                             tension: 0.2,
                             fill: true
@@ -668,11 +854,11 @@ window.refreshDashboard = async function() {
                         {
                             label: 'Success (100% = TERMINATED)',
                             data: successData,
-                            borderColor: '#10b981',
-                            borderDash: [5, 5],
+                            borderColor: '#0f172a',
+                            borderDash: [5, 4],
                             yAxisID: 'y1',
                             pointRadius: 4,
-                            pointBackgroundColor: runs.map(r => r.success ? '#10b981' : '#ef4444')
+                            pointBackgroundColor: '#0f172a'
                         }
                     ]
                 },
@@ -683,91 +869,89 @@ window.refreshDashboard = async function() {
                         y: {
                             type: 'linear',
                             position: 'left',
-                            title: { display: true, text: 'Latency (ms)', color: '#38bdf8' },
-                            ticks: { color: '#a1a1aa' },
-                            grid: { color: 'rgba(255,255,255,0.05)' }
+                            title: { display: true, text: 'Latency (ms)', color: '#ea384c' },
+                            ticks: { color: '#64748b' },
+                            grid: { color: '#f1f5f9' }
                         },
                         y1: {
                             type: 'linear',
                             position: 'right',
                             min: 0,
                             max: 100,
-                            title: { display: true, text: 'Status %', color: '#10b981' },
-                            ticks: { color: '#a1a1aa', stepSize: 50 },
+                            title: { display: true, text: 'Success %', color: '#0f172a' },
+                            ticks: { color: '#64748b', stepSize: 50 },
                             grid: { drawOnChartArea: false }
                         },
-                        x: { ticks: { color: '#a1a1aa' }, grid: { display: false } }
+                        x: { ticks: { color: '#64748b' }, grid: { display: false } }
                     },
                     plugins: {
-                        legend: { labels: { color: '#e4e4e7' } }
+                        legend: { labels: { color: '#0f172a' } }
                     }
                 }
             });
         }
 
-        const attEl = document.getElementById('attestation-explorer');
-        if(attEl) {
-            if(!entries || entries.length === 0) {
-                attEl.innerHTML = `<div class="empty-state" style="padding: 30px;">No data yet</div>`;
+        if (agent) {
+            const nameEl = document.getElementById('dash-agent-name');
+            const idEl = document.getElementById('dash-agent-id');
+            const stEl = document.getElementById('dash-agent-status');
+            const topName = document.getElementById('top-agent-name');
+            const topStatus = document.getElementById('top-agent-status');
+
+            if (nameEl) nameEl.textContent = agent.name || 'Sandbox Agent';
+            if (idEl) idEl.textContent = agent.id ? agent.id.substring(0, 8) : '--';
+            if (topName) topName.textContent = agent.name ? `${agent.name}-${(agent.id || '').substring(0, 8)}` : (agent.id || 'Sandboxed-Agent');
+
+            if (stEl) {
+                stEl.textContent = agent.status || 'UNKNOWN';
+                stEl.className = `badge ${agent.status === 'ACTIVE' ? 'success' : 'warning'}`;
+            }
+            if (topStatus) {
+                topStatus.textContent = agent.status === 'ACTIVE' ? '● Active' : `● ${agent.status}`;
+                topStatus.style.color = agent.status === 'ACTIVE' ? 'var(--success)' : 'var(--danger)';
+            }
+        }
+        if (agentStatus) {
+            const modeEl = document.getElementById('dash-agent-mode');
+            const modelEl = document.getElementById('dash-agent-model');
+            const keyEl = document.getElementById('dash-agent-key');
+            const topModel = document.getElementById('top-agent-model');
+            const topRuntime = document.getElementById('top-agent-runtime');
+
+            if (modeEl) modeEl.textContent = agentStatus.mode || 'Gemini';
+            if (modelEl) modelEl.textContent = agentStatus.model || 'gemini-3.5-flash-lite';
+            if (topModel) topModel.textContent = `${agentStatus.mode || 'Gemini'} (Simulated)`;
+            if (topRuntime) topRuntime.textContent = 'Sandbox';
+
+            if (keyEl) {
+                keyEl.textContent = agentStatus.key_status || 'missing';
+                keyEl.className = `badge ${agentStatus.key_status === 'configured' ? 'success' : 'warning'}`;
+            }
+        }
+        const credsTbody = document.getElementById('dash-creds-tbody');
+        if (credsTbody) {
+            if (creds === null) {
+                credsTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:15px;">Credentials temporarily unavailable.</td></tr>`;
+            } else if (!creds || creds.length === 0) {
+                credsTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:15px;">No credentials provisioned yet.</td></tr>`;
             } else {
-                attEl.innerHTML = entries.map(ent => `
-                    <div style="border-bottom: 1px solid rgba(255,255,255,0.05); padding: 8px 0; display:flex; justify-content:space-between; align-items:center;">
-                        <div>
-                            <span style="color:var(--neon-blue); font-weight:bold;">#${ent.entry_index}</span>
-                            <span style="color:var(--text-muted); margin-left:8px;">ID: ${ent.event_id.substring(0,8)}</span>
-                            <span style="color:#777; margin-left:8px;">Prev: ${ent.previous_hash.substring(0,10)}...</span>
-                        </div>
-                        <div style="text-align:right;">
-                            <span style="color:var(--success); font-family:monospace; font-size:10px;">${ent.current_hash.substring(0,12)}...</span>
-                            <span class="badge" style="background:#222; margin-left:6px; font-size:9px;">ECDSA</span>
-                        </div>
-                    </div>
+                credsTbody.innerHTML = creds.map(c => `
+                    <tr>
+                        <td style="font-weight:700; color:var(--accent-red);">${c.channel_type === 'network' ? 'NETWORK' : c.channel_type.toUpperCase()}</td>
+                        <td style="color:var(--text-secondary);">${c.channel_type === 'network' ? 'External Tool/API Proxy' : 'Local Channel'}</td>
+                        <td style="font-family:var(--font-mono); color:var(--text-primary);"><code>${c.credential_value}</code></td>
+                        <td><span class="badge ${c.status === 'ACTIVE' ? 'success' : (c.status === 'REVOKED' ? 'danger' : 'warning')}" style="font-size:10px;">${c.status}</span></td>
+                    </tr>
                 `).join('');
             }
         }
 
-        const kbEl = document.getElementById('killbench-data');
-        if(kbEl) {
-            const m = killbench && killbench.system_metrics ? killbench.system_metrics : {
-                total_runs: summary ? summary.total_shutdowns : 0,
-                success_rate_percent: summary ? summary.success_rate : 0.0,
-                mean_revocation_latency_ms: summary ? summary.mean_revocation_latency_ms : 0.0,
-                total_leaks_detected: summary ? summary.total_leaks : 0
-            };
-
-            kbEl.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap: 10px;">
-                    <div style="flex:1;">
-                        <div style="font-weight:bold; color:#fff; font-size:13px; margin-bottom:4px;">Lee & Park (2025) Multi-Channel Revocation Dimension</div>
-                        <p style="color:var(--text-muted); margin:0; font-size:11px; line-height:1.4;">
-                            KILLBENCH standard evaluates single external channels. This framework attests multi-channel simultaneous containment with cryptographic non-repudiation.
-                        </p>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:4px; padding:8px 12px; font-size:11px; min-width:180px;">
-                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                            <span style="color:var(--text-muted)">Runs:</span> <strong>${m.total_runs}</strong>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                            <span style="color:var(--text-muted)">Success Rate:</span> <strong style="color:var(--success)">${m.success_rate_percent}%</strong>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                            <span style="color:var(--text-muted)">Latency:</span> <strong>${m.mean_revocation_latency_ms} ms</strong>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                            <span style="color:var(--text-muted)">Leaks:</span> <strong style="color:${m.total_leaks_detected > 0 ? 'var(--danger)' : 'var(--success)'}">${m.total_leaks_detected}</strong>
-                        </div>
-                        <div style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border); font-size:10px; color:#888;">
-                            Lee & Park (2025) Baseline
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
         const tbody = document.querySelector('#history-table tbody');
-        if(tbody) {
-            if(!history || history.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding: 30px;">No data yet</td></tr>`;
+        if (tbody) {
+            if (history === null) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding: 30px;">Run history temporarily unavailable</td></tr>`;
+            } else if (!history || history.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding: 30px;">No runs recorded yet. Use 'Initiate Shutdown' or 'Run N Tests' above to generate test runs.</td></tr>`;
             } else {
                 tbody.innerHTML = history.map(h => {
                     const isTerm = h.final_state === 'TERMINATED';
@@ -776,17 +960,17 @@ window.refreshDashboard = async function() {
                     const modeVal = (h.agent_mode || 'gemini').toLowerCase();
                     const modeBadge = modeVal === 'scripted'
                         ? '<span class="badge warning" style="font-size:10px;">SCRIPTED</span>'
-                        : '<span class="badge" style="background:#2563eb; color:#fff; font-size:10px;">GEMINI</span>';
+                        : '<span class="badge info" style="font-size:10px;">GEMINI</span>';
                     return `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); cursor:pointer;" onclick="openShutdownReport('${h.id}')" title="Click to view Shutdown Report">
-                            <td style="padding:8px; font-family:monospace; color:var(--neon-blue); font-weight:bold;">${h.id.substring(0,8)}</td>
-                            <td style="padding:8px;">${trigTime}</td>
-                            <td style="padding:8px;"><span class="badge" style="background:#222; font-size:10px;">${h.triggered_by || h.trigger_type || 'manual'}</span></td>
-                            <td style="padding:8px;">${modeBadge}</td>
-                            <td style="padding:8px; font-weight:bold; color:var(--neon-blue);">Strategy ${h.strategy}</td>
-                            <td style="padding:8px;"><span class="badge ${badgeClass}" style="font-size:10px;">${h.final_state}</span></td>
-                            <td style="padding:8px;">${(h.residual_risk * 100).toFixed(1)}%</td>
-                            <td style="padding:8px; color:${(h.in_flight_failures || 0) > 0 ? 'var(--danger)' : '#aaa'}">${h.in_flight_failures || 0}</td>
+                        <tr style="cursor:pointer;" onclick="openShutdownReport('${h.id}')" title="Click to view Shutdown Report">
+                            <td><a href="javascript:void(0)" onclick="event.stopPropagation(); openShutdownReport('${h.id}')" style="font-family:var(--font-mono); color:var(--accent-red); font-weight:700; text-decoration:underline;">${h.id.substring(0,8)}</a></td>
+                            <td style="font-size:11px; color:var(--text-muted);">${trigTime}</td>
+                            <td><span class="badge neutral" style="font-size:10px;">${h.triggered_by || h.trigger_type || 'manual'}</span></td>
+                            <td>${modeBadge}</td>
+                            <td style="font-weight:700; color:var(--accent-red);">Strategy ${h.strategy}</td>
+                            <td><span class="badge ${badgeClass}" style="font-size:10px;">${h.final_state}</span></td>
+                            <td style="font-family:var(--font-mono);">${(h.residual_risk * 100).toFixed(1)}%</td>
+                            <td style="font-family:var(--font-mono); font-weight:700; color:${(h.in_flight_failures || 0) > 0 ? 'var(--danger)' : 'var(--text-muted)'};">${h.in_flight_failures || 0}</td>
                         </tr>
                     `;
                 }).join('');
@@ -794,6 +978,8 @@ window.refreshDashboard = async function() {
         }
     } catch(e) {
         console.error("Dashboard refresh error:", e);
+    } finally {
+        _isRefreshingDashboard = false;
     }
 };
 

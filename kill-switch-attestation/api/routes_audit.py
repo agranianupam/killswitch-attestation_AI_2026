@@ -1,7 +1,3 @@
-"""
-api/routes_audit.py
-"""
-
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,11 +16,15 @@ async def get_attestation_entries(db: AsyncSession = Depends(get_db)):
     return [
         {
             "index": idx,
+            "entry_index": idx,
             "id": e.id,
             "entry_hash": e.entry_hash,
+            "current_hash": e.entry_hash,
             "prev_hash": e.prev_hash,
+            "previous_hash": e.prev_hash,
             "signature": e.signature,
             "shutdown_event_id": e.shutdown_event_id,
+            "event_id": e.shutdown_event_id,
             "timestamp": e.created_at.isoformat() if e.created_at else None,
             "created_at": e.created_at.isoformat() if e.created_at else None,
             "payload_json": e.payload_json
@@ -54,9 +54,15 @@ async def api_verify_chain(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+import re
+
 @router.get("/export/{event_id}", response_class=PlainTextResponse)
 async def api_export_report(event_id: str, db: AsyncSession = Depends(get_db)):
+    if not re.match(r"^[a-zA-Z0-9_\-]+$", event_id):
+        raise HTTPException(status_code=400, detail="Invalid event ID format")
     report_content = await export_signed_report(db, event_id)
+    if report_content.startswith("No attestation entry or event found"):
+        raise HTTPException(status_code=404, detail="Attestation report not found for the requested event ID")
     return PlainTextResponse(
         content=report_content,
         headers={"Content-Disposition": f'attachment; filename="killswitch_attestation_{event_id}.md"'}

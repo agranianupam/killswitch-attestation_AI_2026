@@ -30,6 +30,12 @@ class ShutdownEvent(Base):
     total_revocation_ms = Column(Float, default=0.0)
     retries_total = Column(Integer, default=0)
     tokens_used = Column(Integer, default=0)
+    prompt_tokens = Column(Integer, nullable=True)
+    completion_tokens = Column(Integer, nullable=True)
+    total_tokens = Column(Integer, nullable=True)
+    model_total_duration_ms = Column(Float, nullable=True)
+    last_channel_revoked_at = Column(DateTime, nullable=True)
+    attestation_written_at = Column(DateTime, nullable=True)
     random_seed = Column(Integer, nullable=True)
     cycle_start_gap_seconds = Column(Float, nullable=True)
 

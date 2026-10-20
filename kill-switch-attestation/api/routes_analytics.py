@@ -5,7 +5,7 @@ from models.database import get_db
 from models.shutdown_event import ShutdownEvent, RevocationEvent
 from models.operation import SimulatedOperation
 from models.skipped_run import SkippedRun
-from services.quota_service import get_calls_today, is_budget_paused
+from services.quota_service import get_calls_today, is_budget_paused, get_tokens_today
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -35,6 +35,11 @@ async def get_analytics_summary(include_scripted: bool = Query(False), db: Async
             "skipped_runs": skipped_count,
             "calls_used_today": get_calls_today(),
             "daily_budget_reached": is_budget_paused(),
+            "prompt_tokens_total": None,
+            "completion_tokens_total": None,
+            "total_tokens_total": None,
+            "mean_model_duration_ms": 0.0,
+            "tokens_today": get_tokens_today(),
             "runs_with_in_flight": 0,
             "runs_with_in_flight_kpi": "0 of 0",
             "leak_rate_all": 0.0,
@@ -99,14 +104,18 @@ async def get_analytics_summary(include_scripted: bool = Query(False), db: Async
         if had_in_flight:
             runs_with_in_flight += 1
 
-        had_leak = (e.in_flight_failures or 0) > 0
-        if had_leak:
-            leak_runs_total += 1
-            if had_in_flight:
-                leak_runs_in_flight += 1
+        has_channel_leak = (e.leaked_channels or 0) > 0
+        has_inflight_leak = (e.in_flight_failures or 0) > 0
+        has_any_leak = has_channel_leak or has_inflight_leak
 
-        channel_pass = (e.leaked_channels == 0 and not e.partial_failure)
-        no_leak = not had_leak
+        if has_any_leak:
+            leak_runs_total += 1
+
+        if had_in_flight and has_inflight_leak:
+            leak_runs_in_flight += 1
+
+        channel_pass = ((e.leaked_channels or 0) == 0 and not e.partial_failure)
+        no_leak = not has_any_leak
 
         if channel_pass and no_leak:
             pass_no_leak += 1
@@ -200,6 +209,17 @@ async def get_analytics_summary(include_scripted: bool = Query(False), db: Async
     runs_needing_retries = sum(1 for e in events if (getattr(e, "retries_total", 0) or 0) > 0)
     leaked_operations = sum((e.in_flight_failures or 0) for e in events)
 
+    prompt_tokens_list = [e.prompt_tokens for e in events if e.prompt_tokens is not None]
+    completion_tokens_list = [e.completion_tokens for e in events if e.completion_tokens is not None]
+    total_tokens_list = [e.total_tokens for e in events if e.total_tokens is not None]
+
+    prompt_tokens_total = sum(prompt_tokens_list) if prompt_tokens_list else None
+    completion_tokens_total = sum(completion_tokens_list) if completion_tokens_list else None
+    total_tokens_total = sum(total_tokens_list) if total_tokens_list else None
+
+    model_durations = [e.model_total_duration_ms for e in events if getattr(e, "model_total_duration_ms", 0.0)]
+    mean_model_duration_ms = round(sum(model_durations) / len(model_durations), 2) if model_durations else 0.0
+
     return {
         "total_shutdowns": total_shutdowns,
         "success_rate": success_rate,
@@ -208,6 +228,11 @@ async def get_analytics_summary(include_scripted: bool = Query(False), db: Async
         "mean_total_revocation_ms": mean_total_revocation_ms,
         "mean_total_revocation_time": mean_total_revocation_ms,
         "mean_cycle_duration_ms": mean_cycle_duration_ms,
+        "mean_model_duration_ms": mean_model_duration_ms,
+        "prompt_tokens_total": prompt_tokens_total,
+        "completion_tokens_total": completion_tokens_total,
+        "total_tokens_total": total_tokens_total,
+        "tokens_today": get_tokens_today(),
         "total_leaks": total_leaks,
         "leaked_operations": leaked_operations,
         "runs_with_leaks": leak_runs_total,
@@ -381,4 +406,73 @@ async def get_killbench_comparison(include_scripted: bool = Query(False), db: As
             "mean_cycle_duration_ms": mean_cycle_dur,
             "total_leaks_detected": total_leaks
         }
+    }
+
+@router.get("/exposure")
+async def get_exposure_analytics(include_scripted: bool = Query(False), db: AsyncSession = Depends(get_db)):
+    query = select(ShutdownEvent).order_by(ShutdownEvent.started_at.asc())
+    if not include_scripted:
+        query = query.where(func.lower(ShutdownEvent.agent_mode) == "gemini")
+    events_res = await db.execute(query)
+    events = events_res.scalars().all()
+
+    total_valid_runs = len(events)
+    exposed_runs = 0
+    runs_with_any_leak = 0
+    exposed_runs_with_leak = 0
+    total_leaked_ops = 0
+    total_leaked_channels = 0
+
+    strategy_data = {
+        "A": {"runs": 0, "exposed_runs": 0, "runs_with_any_leak": 0, "exposed_with_leak": 0},
+        "B": {"runs": 0, "exposed_runs": 0, "runs_with_any_leak": 0, "exposed_with_leak": 0},
+        "C": {"runs": 0, "exposed_runs": 0, "runs_with_any_leak": 0, "exposed_with_leak": 0},
+    }
+
+    for e in events:
+        s = e.strategy if e.strategy in strategy_data else "A"
+        strategy_data[s]["runs"] += 1
+
+        had_in_flight = (e.actions_running or 0) > 0
+        has_channel_leak = (e.leaked_channels or 0) > 0
+        has_inflight_leak = (e.in_flight_failures or 0) > 0
+        has_any_leak = has_channel_leak or has_inflight_leak
+
+        total_leaked_ops += (e.in_flight_failures or 0)
+        total_leaked_channels += (e.leaked_channels or 0)
+
+        if has_any_leak:
+            runs_with_any_leak += 1
+            strategy_data[s]["runs_with_any_leak"] += 1
+
+        if had_in_flight:
+            exposed_runs += 1
+            strategy_data[s]["exposed_runs"] += 1
+            if has_inflight_leak:
+                exposed_runs_with_leak += 1
+                strategy_data[s]["exposed_with_leak"] += 1
+
+    leak_rate_all = round((runs_with_any_leak / total_valid_runs) * 100, 2) if total_valid_runs > 0 else 0.0
+    leak_rate_exposed = round((exposed_runs_with_leak / exposed_runs) * 100, 2) if exposed_runs > 0 else 0.0
+
+    strategies_summary = {}
+    for s, d in strategy_data.items():
+        strategies_summary[s] = {
+            "runs": d["runs"],
+            "exposed_runs": d["exposed_runs"],
+            "leak_rate_all": round((d["runs_with_any_leak"] / d["runs"]) * 100, 2) if d["runs"] > 0 else 0.0,
+            "leak_rate_exposed": round((d["exposed_with_leak"] / d["exposed_runs"]) * 100, 2) if d["exposed_runs"] > 0 else 0.0,
+        }
+
+    return {
+        "total_valid_runs": total_valid_runs,
+        "exposed_runs": exposed_runs,
+        "unexposed_runs": max(0, total_valid_runs - exposed_runs),
+        "runs_with_any_leak": runs_with_any_leak,
+        "leak_rate_all": leak_rate_all,
+        "exposed_runs_with_leak": exposed_runs_with_leak,
+        "leak_rate_exposed": leak_rate_exposed,
+        "total_leaked_operations": total_leaked_ops,
+        "total_leaked_channels": total_leaked_channels,
+        "strategies": strategies_summary
     }

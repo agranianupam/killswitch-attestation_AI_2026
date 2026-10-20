@@ -20,7 +20,7 @@ async def operation_loop():
             async with AsyncSessionLocal() as db:
                 result = await db.execute(
                     select(Agent)
-                    .where(Agent.status.in_(("ACTIVE", "SHUTDOWN_INITIATED")))
+                    .where(Agent.status == "ACTIVE")
                     .order_by(desc(Agent.created_at))
                     .limit(1)
                 )
@@ -29,7 +29,7 @@ async def operation_loop():
                     await asyncio.sleep(config.OP_INTERVAL)
                     continue
 
-                if agent.status not in ("ACTIVE", "SHUTDOWN_INITIATED"):
+                if agent.status != "ACTIVE":
                     await asyncio.sleep(config.OP_INTERVAL)
                     continue
 

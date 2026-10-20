@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import Optional
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from models.database import get_db
 from models.experiment import Experiment, ExperimentResult
-from api.auth import require_auth
 from services.experiment_service import run_experiment
 from services.export_service import get_experiment_csv
 import uuid
@@ -15,7 +15,7 @@ _comparison_history: list[dict] = []
 router = APIRouter(prefix="/api/experiments", tags=["experiments"])
 
 @router.post("/compare")
-async def run_strategy_comparison(cycles: int = 5, db: AsyncSession = Depends(get_db), auth_user: str = Depends(require_auth)):
+async def run_strategy_comparison(cycles: int = 5, agent_mode: str = "scripted", db: AsyncSession = Depends(get_db), auth_user: Optional[str] = None):
     if cycles < 1 or cycles > 30:
         raise HTTPException(status_code=400, detail="Cycles per strategy must be between 1 and 30")
 
@@ -52,25 +52,28 @@ async def run_strategy_comparison(cycles: int = 5, db: AsyncSession = Depends(ge
                 db,
                 strategy=strat,
                 trigger_type="comparison",
-                triggered_by="experiment"
+                triggered_by="experiment",
+                agent_mode=agent_mode
             )
 
             if res.get("status") == "skipped":
                 continue
 
-            is_success = (res.get("final_state") == "TERMINATED" and not res.get("partial_failure") and (res.get("in_flight_failures", 0) == 0))
-            has_leak = ((res.get("leaked_channels", 0) > 0) or (res.get("in_flight_failures", 0) > 0))
-            had_in_flight = ((res.get("actions_running", 0) > 0) or (res.get("in_flight_failures", 0) > 0))
+            is_success = (res.get("final_state") == "TERMINATED" and not res.get("partial_failure") and (res.get("in_flight_failures", 0) == 0) and (res.get("leaked_channels", 0) == 0))
+            has_channel_leak = (res.get("leaked_channels", 0) > 0)
+            has_inflight_leak = (res.get("in_flight_failures", 0) > 0)
+            has_any_leak = has_channel_leak or has_inflight_leak
+            had_in_flight = (res.get("actions_running", 0) > 0)
 
             sd = strategies_data[strat]
             sd["runs"] += 1
             if is_success:
                 sd["success_count"] += 1
-            if has_leak:
+            if has_any_leak:
                 sd["leak_count"] += 1
             if had_in_flight:
                 sd["runs_with_in_flight"] += 1
-                if has_leak:
+                if has_inflight_leak:
                     sd["leak_runs_in_flight"] += 1
             sd["total_risks"].append(float(res.get("residual_risk", 0.0)))
 
@@ -145,7 +148,7 @@ async def export_comparison_csv(id: str):
     return PlainTextResponse(content="\n".join(lines), media_type="text/csv", headers={"Content-Disposition": f"attachment; filename=comparison_{id}.csv"})
 
 @router.post("")
-async def create_experiment(strategy: str, cycles: int, db: AsyncSession = Depends(get_db), auth_user: str = Depends(require_auth)):
+async def create_experiment(strategy: str, cycles: int, db: AsyncSession = Depends(get_db)):
     if strategy not in ("A", "B", "C"):
         raise HTTPException(status_code=400, detail="Invalid strategy")
     if cycles < 1 or cycles > 100:
