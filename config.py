@@ -36,11 +36,13 @@ GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 AGENT_MODEL: str = os.getenv("AGENT_MODEL", "gemini-3.5-flash-lite")
 
 def _init_agent_mode() -> str:
-    env_mode = os.getenv("KS_AGENT_MODE")
+    env_mode = os.getenv("KS_AGENT_MODE") or os.getenv("AGENT_MODE")
     if env_mode:
         m = env_mode.strip().lower()
         if m in ("scripted", "offline"):
             return "Scripted"
+        if m in ("gemini", "live"):
+            return "Gemini"
     return "Gemini"
 
 AGENT_MODE: str = _init_agent_mode()

@@ -105,7 +105,7 @@ window.render_experiments = async function(container) {
                     </table>
                 </div>
 
-                <div style="height:360px; position:relative; background:#ffffff; padding:15px; border-radius:8px; border:1px solid var(--border);">
+                <div style="height:360px; position:relative; background:var(--bg-card); padding:15px; border-radius:8px; border:1px solid var(--border);">
                     <canvas id="comparisonChart"></canvas>
                 </div>
             </div>

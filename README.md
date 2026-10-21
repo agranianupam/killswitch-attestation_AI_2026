@@ -176,6 +176,12 @@ python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 Open **http://127.0.0.1:8000** in your browser. Log in with `admin` / `admin`.
 
+### Dashboard Theme & Visual Ergonomics
+The dashboard features real-time theme switching between Light Mode and Dark Mode:
+- **Low-Glare Dark Mode Headings**: Eliminates stark white halation against dark backgrounds by calibrating main titles to soft cool-titanium (`#cbd5e1`) and section/panel titles to silver-slate (`#94a3b8`), providing optimal readability and contrast.
+- **Translucent Table Row Hover**: Table rows utilize a subtle translucent overlay (`rgba(255, 255, 255, 0.045)`) upon cursor hover instead of opaque white fills, keeping text legible and visually cohesive.
+- **Integrated Table Header Styling**: Header elements (`<th>`) are styled in dark titanium (`#0c0c0e`) with silver-slate typography, eliminating glaring light bars across panels.
+
 ---
 
 ## 9. Reconciled Database & Test Evidence
