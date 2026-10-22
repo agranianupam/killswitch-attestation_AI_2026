@@ -46,10 +46,16 @@ class GeminiUnavailableError(Exception):
 def make_client():
     key = getattr(config, "GEMINI_API_KEY", "")
     if not key or key == "PASTE_YOUR_GEMINI_API_KEY_HERE":
+        if hasattr(config, "reload_env"):
+            config.reload_env()
+        key = getattr(config, "GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
+
+    if not key or key == "PASTE_YOUR_GEMINI_API_KEY_HERE":
         return None
     try:
         return genai.Client(api_key=key)
-    except Exception:
+    except Exception as exc:
+        print(f"[agent_llm] genai.Client initialization failed: {sanitize_log_message(str(exc))}")
         return None
 
 class GeminiSandboxedAgent:
@@ -88,6 +94,8 @@ class GeminiSandboxedAgent:
 
     async def _run_internal(self):
         if self.mode == "gemini":
+            if self.client is None:
+                self.client = make_client()
             if self.client is None:
                 raise GeminiUnavailableError("Gemini authentication failed. Check GEMINI_API_KEY.", reason_class="auth")
             return await self._run_gemini()

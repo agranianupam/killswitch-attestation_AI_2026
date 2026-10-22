@@ -20,7 +20,11 @@ async def _get_current_agent(db: AsyncSession) -> Agent:
 
 @router.get("/status")
 async def get_agent_status():
-    key = getattr(config, "GEMINI_API_KEY", "")
+    key = getattr(config, "GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
+    if not key or key == "PASTE_YOUR_GEMINI_API_KEY_HERE":
+        if hasattr(config, "reload_env"):
+            config.reload_env()
+        key = getattr(config, "GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
     key_status = "configured" if (key and key != "PASTE_YOUR_GEMINI_API_KEY_HERE") else "missing"
     return {
         "key_status": key_status,

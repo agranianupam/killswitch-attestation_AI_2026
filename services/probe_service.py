@@ -39,8 +39,20 @@ async def probe_external_tool(db: AsyncSession, cred_id: str) -> bool:
         return False
     return cred.status != "REVOKED"
 
+async def probe_channel_generic(db: AsyncSession, cred_id: str) -> bool:
+    await asyncio.sleep(0.050)
+    result = await db.execute(select(Credential).where(Credential.id == cred_id))
+    cred = result.scalar_one_or_none()
+    if not cred:
+        return False
+    return cred.status not in ("REVOKED", "EXPIRED")
+
 async def run_all_probes(db: AsyncSession, credentials: list[Credential]) -> dict[str, bool]:
-    """Runs probes for given credentials and returns a mapping of credential_id -> is_leaked (bool)"""
+    """
+    Runs challenge probes concurrently for given credentials.
+    Returns a mapping of credential_id -> is_leaked (bool).
+    A channel is flagged as leaked if it remains accessible or failed revocation.
+    """
     results = {}
     tasks = []
 
@@ -53,11 +65,21 @@ async def run_all_probes(db: AsyncSession, credentials: list[Credential]) -> dic
             tasks.append((cred.id, probe_iam_role(db, cred.id)))
         elif cred.channel_type in ("network", "network_proxy", "external_tool"):
             tasks.append((cred.id, probe_external_tool(db, cred.id)))
+        else:
+            tasks.append((cred.id, probe_channel_generic(db, cred.id)))
+
+    if not tasks:
+        return results
 
     coros = [t[1] for t in tasks]
-    res_list = [await c for c in coros]
+    raw_results = await asyncio.gather(*coros, return_exceptions=True)
 
     for i, (cred_id, _) in enumerate(tasks):
-        results[cred_id] = res_list[i]
+        outcome = raw_results[i]
+        if isinstance(outcome, Exception):
+            # Fail closed: unhandled probe failure indicates potential channel liveness
+            results[cred_id] = True
+        else:
+            results[cred_id] = bool(outcome)
 
     return results

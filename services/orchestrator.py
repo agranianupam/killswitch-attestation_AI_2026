@@ -93,6 +93,10 @@ async def _revoke_with_retries(
 
         while attempts <= config.REVOKE_RETRIES:
             if attempts > 0:
+                # Exponential backoff between retries (e.g. 25ms, 50ms)
+                backoff_ms = min(200.0, 25.0 * (2 ** (attempts - 1)))
+                await asyncio.sleep(backoff_ms / 1000.0)
+
                 await manager.broadcast({
                     "type": "credential_retry",
                     "data": {
@@ -103,21 +107,40 @@ async def _revoke_with_retries(
                     }
                 })
 
-            res = await revoke_credential(
-                db,
-                credential_id,
-                rng=rng,
-                failure_prob=failure_prob,
-                delay_min=delay_min,
-                delay_max=delay_max
-            )
-            total_latency += res["latency_ms"]
+            try:
+                res = await asyncio.wait_for(
+                    revoke_credential(
+                        db,
+                        credential_id,
+                        rng=rng,
+                        failure_prob=failure_prob,
+                        delay_min=delay_min,
+                        delay_max=delay_max
+                    ),
+                    timeout=5.0
+                )
+            except asyncio.TimeoutError:
+                res = {
+                    "success": False,
+                    "latency_ms": 5000.0,
+                    "retries": 0,
+                    "error": f"Revocation timeout on {channel_type} after 5.0s"
+                }
+            except Exception as e:
+                res = {
+                    "success": False,
+                    "latency_ms": 0.0,
+                    "retries": 0,
+                    "error": f"Revocation error on {channel_type}: {str(e)}"
+                }
 
-            if res["success"]:
+            total_latency += res.get("latency_ms", 0.0)
+
+            if res.get("success"):
                 success = True
                 break
 
-            last_error = res["error"]
+            last_error = res.get("error")
             attempts += 1
 
         rev_evt = RevocationEvent(
@@ -270,7 +293,26 @@ async def run_shutdown(
         for cred in credentials
     ]
 
-    revocation_events = await asyncio.gather(*revoke_tasks)
+    raw_results = await asyncio.gather(*revoke_tasks, return_exceptions=True)
+    revocation_events = []
+    for idx, r in enumerate(raw_results):
+        if isinstance(r, Exception):
+            cred = credentials[idx]
+            rev_evt = RevocationEvent(
+                id=uuid.uuid4().hex,
+                shutdown_event_id=shutdown_event.id,
+                credential_id=cred.id,
+                channel_type=cred.channel_type,
+                latency_ms=0.0,
+                success=False,
+                retries=config.REVOKE_RETRIES,
+                error=f"Unhandled exception during revocation: {r}"
+            )
+            db.add(rev_evt)
+            revocation_events.append(rev_evt)
+        else:
+            revocation_events.append(r)
+    await db.commit()
     last_channel_revoked_at = utcnow()
 
     await manager.broadcast({"type": "shutdown_progress", "data": {"shutdown_id": shutdown_event.id, "stage": "probing", "detail": "Probing channels for liveness..."}})
@@ -341,17 +383,23 @@ async def run_shutdown(
         total_in_flight=total_in_flight
     )
 
-    if residual_risk == 0.0:
-        agent.status = "TERMINATED"
-        agent.risk_level = "LOW"
-    else:
+    if failed_revocations > 0 or len(leaked_channel_ids) > 0:
+        agent.status = "CONTAINMENT_FAILED"
+        agent.risk_level = "HIGH"
+        final_state = "CONTAINMENT_FAILED"
+    elif in_flight_failures > 0:
         agent.status = "CONTAINED"
         if residual_risk > 0.35:
             agent.risk_level = "HIGH"
         else:
             agent.risk_level = "MEDIUM"
+        final_state = "CONTAINED"
+    else:
+        agent.status = "TERMINATED"
+        agent.risk_level = "LOW"
+        final_state = "TERMINATED"
 
-    shutdown_event.final_state = agent.status
+    shutdown_event.final_state = final_state
     shutdown_event.residual_risk = residual_risk
     shutdown_event.leaked_channels = len(leaked_channel_ids)
     shutdown_event.in_flight_failures = in_flight_failures

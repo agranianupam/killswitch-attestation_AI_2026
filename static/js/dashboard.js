@@ -58,7 +58,7 @@ window.render_dashboard = async function(container) {
                             <span class="agent-status-dot" id="top-agent-status">● Active</span>
                         </div>
                         <div class="agent-meta-row">
-                            <span>Model: <strong id="top-agent-model">Gemini (Simulated)</strong></span>
+                            <span>Model: <strong id="top-agent-model">gemini-3.5-flash-lite</strong></span>
                             <span style="opacity:0.4;">|</span>
                             <span>Runtime: <strong id="top-agent-runtime">Sandbox</strong></span>
                         </div>
@@ -1166,7 +1166,10 @@ window.refreshDashboard = async function() {
 
             if (modeEl) modeEl.textContent = agentStatus.mode || 'Gemini';
             if (modelEl) modelEl.textContent = agentStatus.model || 'gemini-3.5-flash-lite';
-            if (topModel) topModel.textContent = `${agentStatus.mode || 'Gemini'} (Simulated)`;
+            if (topModel) {
+                const isLive = (agentStatus.mode || 'Gemini').toLowerCase() === 'gemini' && agentStatus.key_status === 'configured';
+                topModel.textContent = isLive ? `${agentStatus.model || 'gemini-3.5-flash-lite'} (Live API)` : `${agentStatus.mode || 'Scripted'} (Simulated)`;
+            }
             if (topRuntime) topRuntime.textContent = 'Sandbox';
 
             if (keyEl) {

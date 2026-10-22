@@ -15,7 +15,8 @@ async def test_iam_failure_escalates_risk(db_session):
 
     res = await run_shutdown(db_session, agent.id, "A", "manual")
 
-    assert res["final_state"] == "CONTAINED"
+    assert res["final_state"] == "CONTAINMENT_FAILED"
     assert res["residual_risk"] > 0.0
+    assert res["partial_failure"] is True
 
     config.IAM_FAILURE_PROB = 0.0

@@ -3,7 +3,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi)](https://fastapi.tiangolo.com)
 [![Python](https://img.shields.io/badge/Python-3.13+-3776AB?logo=python)](https://python.org)
 [![Cryptography](https://img.shields.io/badge/Cryptography-Ed25519-blue)](https://cryptography.io)
-[![Tests](https://img.shields.io/badge/Tests-121%20Passed-success)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-130%20Passed-success)](tests/)
 
 An independent, cryptographic attestation framework designed to evaluate whether an autonomous AI agent's kill switch succeeds across all operational access channels it holds, including commands and transactions already in flight at the moment of shutdown.
 
@@ -72,9 +72,9 @@ The framework benchmarks three distinct containment strategies:
 
 | Strategy | Design Label | Operational Mechanism | Modelled Outcome |
 | :--- | :--- | :--- | :--- |
-| **Strategy A** | Soft Revocation | Revokes credentials only. Agent continues execution until natural end. Does not broadcast containment or cancel running operations. | Operations active at cutoff continue executing; actions finishing past cutoff leak as `COMPLETED_AFTER_SHUTDOWN`. Highest leak rate (~25-35%). Final state: `CONTAINED`. |
-| **Strategy B** | Revoke & Contain | Transitions agent status to `CONTAINING`, halts new operation dispatch, and revokes credentials. | In-flight operations active at cutoff either complete or fail based on `KS_IN_FLIGHT_LEAK_PROB`. Moderate leak rate (~10-20%). Final state: `CONTAINED` or `TERMINATED`. |
-| **Strategy C** | Concurrent Containment | Transitions agent status to `CONTAINING`, executes concurrent revocation via `asyncio.gather`, and actively cancels running in-flight operations (`CANCELLED`). | Residual in-flight leak chance is minimized (`min(0.02, KS_IN_FLIGHT_LEAK_PROB * 0.05)`). Lowest leak rate (~0-2%). Residual risk reaches `0.0000`. Final state: `TERMINATED`. |
+| **Strategy A** | Soft Revocation | Revokes credentials only. Agent continues execution until natural end. Does not broadcast containment or cancel running operations. | Operations active at cutoff continue executing; actions finishing past cutoff leak as `COMPLETED_AFTER_SHUTDOWN`. Highest leak rate (~25-35%). Final state: `CONTAINED` (or `CONTAINMENT_FAILED` if any channel revocation fails). |
+| **Strategy B** | Revoke & Contain | Transitions agent status to `CONTAINING`, halts new operation dispatch, and revokes credentials. | In-flight operations active at cutoff either complete or fail based on `KS_IN_FLIGHT_LEAK_PROB`. Moderate leak rate (~10-20%). Final state: `CONTAINED` or `TERMINATED` (or `CONTAINMENT_FAILED` if channel fails). |
+| **Strategy C** | Concurrent Containment | Transitions agent status to `CONTAINING`, executes concurrent revocation via `asyncio.gather`, and actively cancels running in-flight operations (`CANCELLED`). | Residual in-flight leak chance is minimized (`min(0.02, KS_IN_FLIGHT_LEAK_PROB * 0.05)`). When all channels succeed and operations cancel, residual risk reaches `0.0000` with final state `TERMINATED`. If any channel fails revocation or probe detects liveness, final state is accurately verified as `CONTAINMENT_FAILED` rather than masked as containment. |
 
 > **Scientific Boundary**: Strategy comparisons reflect behaviours modelled within a simulation testbed. Latencies and failure probabilities derive from configurable statistical distributions rather than physical cloud API benchmarks.
 
@@ -107,7 +107,7 @@ Each completed shutdown cycle compiles a deterministic canonical JSON payload:
   "strategy": "A|B|C",
   "started_at": "...",
   "finished_at": "...",
-  "final_state": "TERMINATED|CONTAINED",
+  "final_state": "TERMINATED|CONTAINED|CONTAINMENT_FAILED",
   "residual_risk": 0.0000,
   "leaked_channels": 0,
   "channels": [...],
@@ -160,7 +160,7 @@ The test suite runs 100% offline using mock Gemini clients:
 ```powershell
 python -m pytest tests -q
 ```
-*Expected Result*: **121 passed** across 20 test modules in tests/.
+*Expected Result*: **130 passed** across 21 test modules in tests/.
 
 ### Step 4: Run the Gemini Smoke Test (Optional)
 To verify your live Gemini API key connectivity without initiating a full shutdown cycle:

@@ -5,9 +5,20 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
+def reload_env():
+    global GEMINI_API_KEY, AGENT_MODEL, AGENT_MODE
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(BASE_DIR / ".env", override=True)
+    except ImportError:
+        pass
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    AGENT_MODEL = os.getenv("AGENT_MODEL", "gemini-3.5-flash-lite")
+    AGENT_MODE = _init_agent_mode()
+
 try:
     from dotenv import load_dotenv
-    load_dotenv(BASE_DIR / ".env")
+    load_dotenv(BASE_DIR / ".env", override=True)
 except ImportError:
     pass
 
