@@ -17,6 +17,7 @@ from api.routes_audit import router as audit_router
 from api.routes_analytics import router as analytics_router
 from api.routes_alert import router as alert_router
 from api.routes_adversarial import router as adversarial_router
+from api.routes_external_agent import router as external_agent_router
 from api.websocket import router as ws_router
 
 @asynccontextmanager
@@ -39,6 +40,7 @@ app.include_router(audit_router)
 app.include_router(analytics_router)
 app.include_router(alert_router)
 app.include_router(adversarial_router)
+app.include_router(external_agent_router)
 app.include_router(ws_router)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
