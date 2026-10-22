@@ -67,7 +67,7 @@ window.render_analytics = async function(container) {
             }).join('');
 
             exposureHtml = `
-                <!-- Section 01: Exposure-Aware Metrics -->
+                
                 <div class="section-heading">
                     <span class="sec-num">01</span>
                     <span class="sec-title">Exposure-Aware Conditioning &amp; In-Flight Metrics</span>
@@ -143,7 +143,7 @@ window.render_analytics = async function(container) {
         }
 
         container.innerHTML = `
-            <!-- Floating Wireframe Background & Crosshairs -->
+            
             <div class="hero-wireframe-bg">
                 <svg viewBox="0 0 200 120" fill="none" stroke="#94a3b8" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
                     <polygon points="120,15 180,35 140,65 80,45" stroke="#cbd5e1" stroke-width="0.8"/>
@@ -155,7 +155,6 @@ window.render_analytics = async function(container) {
                 </svg>
             </div>
 
-            <!-- Hero Header -->
             <div class="view-hero">
                 <div class="hero-text">
                     <div class="hero-kicker">Performance &amp; Gaps</div>
@@ -176,7 +175,6 @@ window.render_analytics = async function(container) {
 
             ${exposureHtml}
 
-            <!-- Section 02: KillBench Comparison -->
             <div class="section-heading">
                 <span class="sec-num">02</span>
                 <span class="sec-title">KillBench Architectural &amp; Empirical Comparison</span>
@@ -201,7 +199,6 @@ window.render_analytics = async function(container) {
                 </div>
             </div>
 
-            <!-- Section 03: Timing Gaps -->
             <div class="section-heading">
                 <span class="sec-num">03</span>
                 <span class="sec-title">Continuous Testing Timing Gaps</span>

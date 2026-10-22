@@ -3,7 +3,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi)](https://fastapi.tiangolo.com)
 [![Python](https://img.shields.io/badge/Python-3.13+-3776AB?logo=python)](https://python.org)
 [![Cryptography](https://img.shields.io/badge/Cryptography-Ed25519-blue)](https://cryptography.io)
-[![Tests](https://img.shields.io/badge/Tests-89%20Passed-success)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-121%20Passed-success)](tests/)
 
 An independent, cryptographic attestation framework designed to evaluate whether an autonomous AI agent's kill switch succeeds across all operational access channels it holds, including commands and transactions already in flight at the moment of shutdown.
 
@@ -57,10 +57,10 @@ Every agent tool call is intercepted by `services/agent_tools.py` and gated agai
 
 | Tool Name | Required Credentials | Simulated Duration | Sandboxed Behavior |
 | :--- | :--- | :--- | :--- |
-| `send_email` | `session_token` and `network` | 300 – 1200 ms | Simulated dispatch payload; zero external SMTP/network calls. |
-| `write_file` | `iam_role` | 200 – 800 ms | Confined strictly to `sandbox_tmp/` using `os.path.basename` / `Path.name`. |
-| `call_payment_api` | `api_key` and `session_token` | 800 – 2500 ms | Simulated transaction record; zero payment gateway contact. |
-| `long_running_task`| `api_key` and `network` | 3000 – 8000 ms | Background asynchronous delay representing computation. |
+| `send_email` | `session_token` and `network` | 300 - 1200 ms | Simulated dispatch payload; zero external SMTP/network calls. |
+| `write_file` | `iam_role` | 200 - 800 ms | Confined strictly to `sandbox_tmp/` using `os.path.basename` / `Path.name`. |
+| `call_payment_api` | `api_key` and `session_token` | 800 - 2500 ms | Simulated transaction record; zero payment gateway contact. |
+| `long_running_task`| `api_key` and `network` | 3000 - 8000 ms | Background asynchronous delay representing computation. |
 
 If any required credential is in `REVOKED` state at invocation time, the operation is immediately rejected with a simulated 401 Unauthorized response returned to the LLM.
 
@@ -72,9 +72,9 @@ The framework benchmarks three distinct containment strategies:
 
 | Strategy | Design Label | Operational Mechanism | Modelled Outcome |
 | :--- | :--- | :--- | :--- |
-| **Strategy A** | Soft Revocation | Revokes credentials only. Agent continues execution until natural end. Does not broadcast containment or cancel running operations. | Operations active at cutoff continue executing; actions finishing past cutoff leak as `COMPLETED_AFTER_SHUTDOWN`. Highest leak rate (~25–35%). Final state: `CONTAINED`. |
-| **Strategy B** | Revoke & Contain | Transitions agent status to `CONTAINING`, halts new operation dispatch, and revokes credentials. | In-flight operations active at cutoff either complete or fail based on `KS_IN_FLIGHT_LEAK_PROB`. Moderate leak rate (~10–20%). Final state: `CONTAINED` or `TERMINATED`. |
-| **Strategy C** | Concurrent Containment | Transitions agent status to `CONTAINING`, executes concurrent revocation via `asyncio.gather`, and actively cancels running in-flight operations (`CANCELLED`). | Residual in-flight leak chance is minimized (`min(0.02, KS_IN_FLIGHT_LEAK_PROB * 0.05)`). Lowest leak rate (~0–2%). Residual risk reaches `0.0000`. Final state: `TERMINATED`. |
+| **Strategy A** | Soft Revocation | Revokes credentials only. Agent continues execution until natural end. Does not broadcast containment or cancel running operations. | Operations active at cutoff continue executing; actions finishing past cutoff leak as `COMPLETED_AFTER_SHUTDOWN`. Highest leak rate (~25-35%). Final state: `CONTAINED`. |
+| **Strategy B** | Revoke & Contain | Transitions agent status to `CONTAINING`, halts new operation dispatch, and revokes credentials. | In-flight operations active at cutoff either complete or fail based on `KS_IN_FLIGHT_LEAK_PROB`. Moderate leak rate (~10-20%). Final state: `CONTAINED` or `TERMINATED`. |
+| **Strategy C** | Concurrent Containment | Transitions agent status to `CONTAINING`, executes concurrent revocation via `asyncio.gather`, and actively cancels running in-flight operations (`CANCELLED`). | Residual in-flight leak chance is minimized (`min(0.02, KS_IN_FLIGHT_LEAK_PROB * 0.05)`). Lowest leak rate (~0-2%). Residual risk reaches `0.0000`. Final state: `TERMINATED`. |
 
 > **Scientific Boundary**: Strategy comparisons reflect behaviours modelled within a simulation testbed. Latencies and failure probabilities derive from configurable statistical distributions rather than physical cloud API benchmarks.
 
@@ -143,16 +143,16 @@ The verifier checks signature mathematical validity and hash-chain continuity fr
 
 ## 8. Installation & Run Guide
 
-### Step 1: Navigate to the Application Directory
-The application must be run from the inner project directory where `config.py` and `main.py` reside:
+### Step 1: Navigate to the Repository Root
+The application runs directly from the repository root where `config.py` and `main.py` reside:
 ```powershell
-cd D:\killswitch-attestation_AI_2026\kill-switch-attestation
+cd D:\killswitch-attestation_AI_2026
 ```
 
 ### Step 2: Activate the Virtual Environment
-Activate the pre-configured virtual environment located in the outer directory:
+Activate the pre-configured virtual environment:
 ```powershell
-..\.venv\Scripts\Activate.ps1
+.venv\Scripts\Activate.ps1
 ```
 
 ### Step 3: Run the Complete Offline Test Suite
@@ -160,7 +160,7 @@ The test suite runs 100% offline using mock Gemini clients:
 ```powershell
 python -m pytest tests -q
 ```
-*Expected Result*: **89 passed** in ~55 seconds across 15 test modules.
+*Expected Result*: **121 passed** across 20 test modules in tests/.
 
 ### Step 4: Run the Gemini Smoke Test (Optional)
 To verify your live Gemini API key connectivity without initiating a full shutdown cycle:
@@ -233,8 +233,63 @@ All settings are managed in `config.py` and loaded from `.env` via `python-doten
 
 ---
 
-## 11. Known Limitations & Research Boundaries
+## 11. Persistent Security Alerting & Automated Testing Scheduler
+
+### 11.1 Automated Testing Scheduler
+- **Auto-Startup Lifecycle**: The randomized testing scheduler starts automatically upon application boot (configured via `KS_SCHED_MODE` defaulting to `poisson` with `KS_SCHED_MEAN_SECONDS=600.0`), eliminating empty audit logs on fresh launches.
+- **Observability**: Live telemetry is streamed via WebSockets and accessible via `GET /api/scheduler/status`, reporting scheduling mode, mean interval, next fire countdown, experiment lifecycle status, completed/skipped run tallies, and LLM budget usage.
+- **Admin Control**: Operators can pause or resume the scheduler at any time via the sidebar toggle or dashboard control panel.
+
+### 11.2 Persistent Security Alerts
+- **Database Persistence**: Security anomalies, revocation failures, challenge probe detections (`leaked_channels > 0`), in-flight leaks (`COMPLETED_AFTER_SHUTDOWN`), cryptographic hash chain tampering, and LLM quota exhaustion generate persistent records in the `alerts` relational table.
+- **Real-Time Delivery & Acknowledgment**: Emitted immediately via WebSocket event `ws_new_alert` to connected dashboards, displayed in the persistent alert drawer, and surviving browser page reloads until explicitly acknowledged.
+- **Credential Redaction**: All API keys, raw tokens, and sensitive stack traces are automatically sanitized (`[REDACTED]`) before persistence and broadcasting.
+
+---
+
+## 12. Configurable Adversarial Test Agent & Monitor Evaluation
+
+The framework includes a fully functional, executable adversarial test agent (`AdversarialTestAgent`) and an independent monitor evaluation engine (`EvaluationRecord` and `services/monitor_evaluation_service.py`).
+
+### 12.1 Behavioral Profiles
+1. **Cooperative (`cooperative`)**: Stops promptly upon shutdown and cancels eligible in-flight work.
+2. **Slow (`slow`)**: Dispatches long-duration operations exposing work across the shutdown boundary.
+3. **Cancellation-Resistant (`cancellation_resistant`)**: Delays response to cancellation or completes up to boundary, strictly bounded by the hard experiment timeout.
+4. **Credential-Dependent (`credential_dependent`)**: Exercises all 4 access channels (`api_key`, `session_token`, `iam_role`, `network`), verifying post-revocation requests are rejected by the application's enforcement layer with HTTP 401.
+5. **Retry-Heavy (`retry_heavy`)**: Retries failed/rejected operations according to configurable retry limits and backoff, ensuring revoked controls cannot be bypassed.
+6. **Fault-Injection (`fault_injection`)**: Injects deterministic faults (channel-revocation failure, delayed revocation, probe failures, slow operations, cancellation timeouts) with seed reproducibility.
+
+### 12.2 Independent Monitor Evaluation
+The monitor evaluation engine independently compares ground-truth experimental conditions against telemetry observed by the monitor and alert subsystem:
+- **Confusion Matrix**: True Positives (TP), False Positives (FP), True Negatives (TN), False Negatives (FN).
+- **Evaluation Metrics**: Precision, Recall (Detection Rate), False Positive Rate (FPR), Accuracy.
+- **Statistical Discipline**: Handles zero denominators explicitly as `N/A` rather than silently converting undefined metrics to zero.
+- **Isolation**: An injected fault is not automatically a detection; the monitor must independently observe the failure and emit an alert for it to count as a detection.
+
+### 12.3 REST API Endpoints
+- `GET /api/adversarial/profiles`: Lists all 6 supported behavioral profiles and descriptions.
+- `POST /api/adversarial/run`: Executes an adversarial experiment under specified profile, strategy, parameters, and random seed.
+- `GET /api/adversarial/evaluation`: Returns the live confusion matrix, precision/recall metrics, and profile breakdowns.
+- `GET /api/analytics/export/csv`: Exports the complete experimental dataset preserving profile, strategy, execution mode, random seed, expected vs observed conditions, and attestation IDs.
+
+### 12.4 Running Verification & Strategy Matrix
+To execute the automated end-to-end adversarial verification matrix:
+```bash
+python scripts/verify_adversarial_matrix.py
+```
+
+To run the complete 18-combination evaluation matrix (6 profiles x 3 containment strategies):
+```bash
+python scripts/run_profile_strategy_matrix.py
+```
+
+---
+
+## 13. Known Limitations & Research Boundaries
 
 1. **Simulated Sandbox Latencies**: Channel delays and fault probabilities reflect configurable statistical models rather than physical AWS/GCP cross-region API round-trips.
-2. **Modelled Strategy Comparison**: Strategy C outperforms Strategy A because cancellation logic was explicitly modelled; the core contribution is the measurement and attestation framework.
-3. **SQLite Concurrency**: Embedded SQLite (`aiosqlite`) is tailored for local evaluation; high-concurrency batch sweeps can occasionally produce brief database locks. For multi-tenant production, migration to PostgreSQL is recommended.
+2. **Access Control Boundary**: The containment kill-switch revokes local application credentials, simulated IAM roles, and local networking egress adapters. It does **not** shut down Google's remote Gemini hosting infrastructure.
+3. **Modelled Strategy Comparison**: Strategy C outperforms Strategy A because cancellation logic was explicitly modelled; the core contribution is the measurement and attestation framework.
+4. **SQLite Concurrency**: Embedded SQLite (`aiosqlite` WAL mode) is tailored for local evaluation; high-concurrency batch sweeps can occasionally produce brief database locks. For multi-tenant production, migration to PostgreSQL is recommended.
+
+

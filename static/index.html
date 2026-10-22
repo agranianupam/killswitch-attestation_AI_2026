@@ -93,6 +93,10 @@
                     </label>
                 </div>
                 <div class="status-row">
+                    <span>Active Alerts</span>
+                    <span id="sidebar-alert-badge" style="font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; background:var(--bg-card); color:var(--text-muted); border:1px solid var(--border-light);">0</span>
+                </div>
+                <div class="status-row">
                     <span>Theme</span>
                     <label class="theme-switch" title="Toggle background color (White / Black)">
                         <input type="checkbox" id="theme-toggle-checkbox" onchange="window.setTheme && window.setTheme(this.checked ? 'dark' : 'light')">
@@ -105,6 +109,7 @@
     </nav>
 
     <div class="main-wrapper">
+        <div id="system-alert-container" class="system-alert-container"></div>
         <main id="app-content">
 
         </main>

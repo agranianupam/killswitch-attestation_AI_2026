@@ -104,4 +104,5 @@ async def verify_chain(db: AsyncSession, public_key) -> dict:
         if not verify_signature(entry.payload_json, sig_bytes, public_key):
             return {"valid": False, "entries_checked": i, "first_failure_index": i}
         expected_prev = entry.entry_hash
+
     return {"valid": True, "entries_checked": len(entries), "first_failure_index": None}

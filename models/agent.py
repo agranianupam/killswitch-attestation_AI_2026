@@ -1,5 +1,5 @@
 """
-models/agent.py — Agent ORM model (FR-1).
+models/agent.py - Agent ORM model (FR-1).
 
 Status values: ACTIVE, SHUTDOWN_INITIATED, CONTAINING, TERMINATED, CONTAINED
 Risk values:   LOW, MEDIUM, HIGH

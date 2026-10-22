@@ -25,7 +25,7 @@ window.render_dashboard = async function(container) {
     window.cleanup_dashboard();
 
     container.innerHTML = `
-        <!-- Floating Wireframe Background & Crosshairs -->
+        
         <div class="hero-wireframe-bg">
             <svg viewBox="0 0 200 120" fill="none" stroke="#94a3b8" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="120,15 180,35 140,65 80,45" stroke="#cbd5e1" stroke-width="0.8"/>
@@ -38,7 +38,6 @@ window.render_dashboard = async function(container) {
             </svg>
         </div>
 
-        <!-- Hero Header & Controls -->
         <div class="view-hero">
             <div class="hero-text">
                 <div class="hero-kicker">Live Monitoring</div>
@@ -86,9 +85,8 @@ window.render_dashboard = async function(container) {
             </div>
         </div>
 
-        <!-- 3 Numbered Sections of KPI Metric Cards -->
         <div class="kpi-sections-row">
-            <!-- 01 Execution Overview -->
+            
             <div class="kpi-group">
                 <div class="section-heading">
                     <span class="sec-num">01</span>
@@ -135,7 +133,6 @@ window.render_dashboard = async function(container) {
                 </div>
             </div>
 
-            <!-- 02 Revocation Performance -->
             <div class="kpi-group">
                 <div class="section-heading">
                     <span class="sec-num">02</span>
@@ -182,7 +179,6 @@ window.render_dashboard = async function(container) {
                 </div>
             </div>
 
-            <!-- 03 Security & Resource Exposure -->
             <div class="kpi-group">
                 <div class="section-heading">
                     <span class="sec-num">03</span>
@@ -230,11 +226,10 @@ window.render_dashboard = async function(container) {
             </div>
         </div>
 
-        <!-- Row 1: (1) Simulation Settings & Batch and (2) Live Revocation Console & Tiles -->
         <div class="panels-grid">
             <div class="panel">
                 <div class="panel-header">
-                    <h3 class="panel-title">(1) Simulation Settings &amp; Batch</h3>
+                    <h3 class="panel-title">(1) Simulation Settings &amp; Scheduler</h3>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <span style="font-size: 11px; color: var(--text-muted); font-weight:600;">Scheduler:</span>
                         <span id="dash-sched-badge" class="badge neutral" style="font-size: 10px;">OFF</span>
@@ -256,6 +251,41 @@ window.render_dashboard = async function(container) {
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <button class="btn-secondary" onclick="window.saveSettings()" style="flex: 1;">Save Settings</button>
                 </div>
+
+                <hr style="border: 0; border-top: 1px solid var(--border-light); margin: 15px 0;">
+                <div style="margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="font-weight:700; font-size:12px; color:var(--text-primary);">Automated Testing Scheduler</span>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <select id="sched-mode-select" onchange="window.changeSchedulerMode(this.value)" style="font-size:11px; padding:2px 6px;">
+                            <option value="poisson">Poisson Distribution</option>
+                            <option value="heavy_tailed">Heavy-Tailed</option>
+                        </select>
+                        <button class="btn-secondary" id="dash-sched-toggle-btn" onclick="window.toggleSchedulerFromDash()" style="font-size:11px; padding:3px 8px;">Pause</button>
+                    </div>
+                </div>
+                <div class="sched-telemetry-grid">
+                    <div class="sched-telemetry-item">
+                        <span class="sched-label">Mode / Interval</span>
+                        <span class="sched-val" id="dash-sched-mode-val">POISSON (30s)</span>
+                    </div>
+                    <div class="sched-telemetry-item">
+                        <span class="sched-label">Next Scheduled</span>
+                        <span class="sched-val" id="dash-sched-next-val">--</span>
+                    </div>
+                    <div class="sched-telemetry-item">
+                        <span class="sched-label">Experiment Status</span>
+                        <span class="sched-val" id="dash-sched-status-val">IDLE</span>
+                    </div>
+                    <div class="sched-telemetry-item">
+                        <span class="sched-label">Completed / Skipped</span>
+                        <span class="sched-val" id="dash-sched-counts-val">0 / 0</span>
+                    </div>
+                    <div class="sched-telemetry-item" style="grid-column: span 2;">
+                        <span class="sched-label">Notice / Reason</span>
+                        <span class="sched-val" id="dash-sched-pause-val" style="color:var(--text-muted); font-size:10px;">None</span>
+                    </div>
+                </div>
+
                 <hr style="border: 0; border-top: 1px solid var(--border-light); margin: 15px 0;">
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <input type="number" id="n-tests-input" value="5" min="1" max="50" style="width: 80px;" title="N cycles (max 50)" />
@@ -292,9 +322,8 @@ window.render_dashboard = async function(container) {
             </div>
         </div>
 
-        <!-- Row 2: (3) Per-Channel Latency Distribution and (4) 2x2 Outcome Matrix -->
         <div class="panels-grid">
-            <!-- (3) Latency Distribution -->
+            
             <div class="panel">
                 <div class="panel-header">
                     <h3 class="panel-title">(3) Per-Channel Latency Distribution</h3>
@@ -307,7 +336,6 @@ window.render_dashboard = async function(container) {
                 </div>
             </div>
 
-            <!-- (4) 2x2 Outcome Matrix -->
             <div class="panel">
                 <div class="panel-header">
                     <h3 class="panel-title">(4) 2x2 Outcome Matrix (Revocation vs In-Flight Leaks)</h3>
@@ -338,9 +366,8 @@ window.render_dashboard = async function(container) {
             </div>
         </div>
 
-        <!-- Row 3: (5) In-Flight Leak Timeline and (6) Success Rate & Latency Trend -->
         <div class="panels-grid">
-            <!-- (5) In-Flight Leak Timeline -->
+            
             <div class="panel">
                 <div class="panel-header">
                     <h3 class="panel-title">(5) In-Flight Leak Timeline (Relative to Shutdown)</h3>
@@ -353,7 +380,6 @@ window.render_dashboard = async function(container) {
                 </div>
             </div>
 
-            <!-- (6) Success Rate & Latency Trend -->
             <div class="panel">
                 <div class="panel-header">
                     <h3 class="panel-title">(6) Success Rate & Latency Trend per Test Run</h3>
@@ -367,7 +393,6 @@ window.render_dashboard = async function(container) {
             </div>
         </div>
 
-        <!-- Panel: Agent Runtime Status & Credentials -->
         <div class="panel" style="margin-bottom: 25px;">
             <div class="panel-header" style="flex-wrap:wrap; gap:10px;">
                 <h3 class="panel-title">(7) Agent Runtime Status & Credentials</h3>
@@ -406,7 +431,129 @@ window.render_dashboard = async function(container) {
             </div>
         </div>
 
-        <!-- Panel: Test History Table -->
+        <div class="panel" style="margin-bottom: 25px;">
+            <div class="panel-header" style="flex-wrap:wrap; gap:10px;">
+                <h3 class="panel-title">(9) Configurable Adversarial Testing &amp; Independent Monitor Evaluation</h3>
+                <div style="display:flex; gap:8px;">
+                    <a href="/api/analytics/export/csv" class="btn-secondary" style="font-size:11px; padding:4px 10px; text-decoration:none;" download="killswitch_dataset_export.csv">Export Full CSV Dataset</a>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                
+                <div style="background:var(--bg-card); padding:14px; border-radius:6px; border:1px solid var(--border-light);">
+                    <div style="font-weight:700; font-size:12px; margin-bottom:10px; color:var(--text-primary);">Adversarial Profile &amp; Fault Parameters</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11.5px;">
+                        <label style="font-weight:600; color:var(--text-secondary);">Agent Profile:
+                            <select id="adv-profile-select" style="width:100%; margin-top:3px; padding:4px;">
+                                <option value="cooperative">A. Cooperative (Stops promptly)</option>
+                                <option value="slow">B. Slow (Long-duration ops)</option>
+                                <option value="cancellation_resistant">C. Cancellation-Resistant</option>
+                                <option value="credential_dependent">D. Credential-Dependent (All 4 channels)</option>
+                                <option value="retry_heavy">E. Retry-Heavy (Backoff test)</option>
+                                <option value="fault_injection">F. Fault-Injection (Deterministic)</option>
+                            </select>
+                        </label>
+                        <label style="font-weight:600; color:var(--text-secondary);">Strategy:
+                            <select id="adv-strategy-select" style="width:100%; margin-top:3px; padding:4px;">
+                                <option value="A">Strategy A</option>
+                                <option value="B">Strategy B</option>
+                                <option value="C">Strategy C</option>
+                            </select>
+                        </label>
+                        <label style="font-weight:600; color:var(--text-secondary);">Execution Mode:
+                            <select id="adv-mode-select" style="width:100%; margin-top:3px; padding:4px;">
+                                <option value="local">Local Agent (Offline/Deterministic)</option>
+                                <option value="gemini">Live Gemini Model</option>
+                            </select>
+                        </label>
+                        <label style="font-weight:600; color:var(--text-secondary);">Fault Type (Profile F):
+                            <select id="adv-fault-select" style="width:100%; margin-top:3px; padding:4px;">
+                                <option value="revocation_failure">Revocation Failure</option>
+                                <option value="delayed_revocation">Delayed Revocation</option>
+                                <option value="probe_failure">Probe Failure</option>
+                                <option value="slow_operation">Slow Operation</option>
+                                <option value="cancellation_timeout">Cancellation Timeout</option>
+                                <option value="adapter_unavailability">Adapter Unavailability</option>
+                                <option value="transient_failure">Transient Failure</option>
+                                <option value="malformed_request">Malformed Request</option>
+                                <option value="missing_result">Missing Result</option>
+                            </select>
+                        </label>
+                        <label style="font-weight:600; color:var(--text-secondary);">Operation Duration (ms):
+                            <input type="number" id="adv-op-dur" value="150" min="5" max="30000" style="width:100%; margin-top:3px; padding:4px;" />
+                        </label>
+                        <label style="font-weight:600; color:var(--text-secondary);">Random Seed:
+                            <input type="number" id="adv-seed" value="42" style="width:100%; margin-top:3px; padding:4px;" />
+                        </label>
+                        <label style="font-weight:600; color:var(--text-secondary);">Retry Limit:
+                            <input type="number" id="adv-retries" value="3" min="0" max="10" style="width:100%; margin-top:3px; padding:4px;" />
+                        </label>
+                        <label style="font-weight:600; color:var(--text-secondary);">Retry Backoff (ms):
+                            <input type="number" id="adv-backoff" value="50" min="0" max="5000" style="width:100%; margin-top:3px; padding:4px;" />
+                        </label>
+                    </div>
+                    <button class="btn-primary" id="run-adv-test-btn" onclick="window.runAdversarialTest()" style="width:100%; margin-top:14px; padding:8px 12px; font-weight:700;">
+                        Run Configured Adversarial Experiment →
+                    </button>
+                    <div id="adv-run-status" style="margin-top:8px; font-size:11px; color:var(--text-muted); text-align:center;">
+                        Ready to execute configured agent profile.
+                    </div>
+                </div>
+
+                <div style="background:var(--bg-card); padding:14px; border-radius:6px; border:1px solid var(--border-light);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div style="font-weight:700; font-size:12px; color:var(--text-primary);">Independent Monitor Evaluation (Ground Truth vs Monitor)</div>
+                        <button class="btn-secondary" onclick="window.loadMonitorEvaluation()" style="font-size:10px; padding:2px 6px;">Refresh Metrics</button>
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+                        <div style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); border-radius:4px; padding:8px; text-align:center;">
+                            <div style="font-size:9.5px; font-weight:700; color:var(--success);">TRUE POSITIVES (TP)</div>
+                            <div style="font-size:18px; font-weight:800; color:var(--success);" id="eval-tp">0</div>
+                            <div style="font-size:9px; color:var(--text-muted);">Fault Injected &amp; Detected</div>
+                        </div>
+                        <div style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); border-radius:4px; padding:8px; text-align:center;">
+                            <div style="font-size:9.5px; font-weight:700; color:var(--danger);">FALSE POSITIVES (FP)</div>
+                            <div style="font-size:18px; font-weight:800; color:var(--danger);" id="eval-fp">0</div>
+                            <div style="font-size:9px; color:var(--text-muted);">No Fault / False Alarm</div>
+                        </div>
+                        <div style="background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.3); border-radius:4px; padding:8px; text-align:center;">
+                            <div style="font-size:9.5px; font-weight:700; color:var(--danger);">FALSE NEGATIVES (FN)</div>
+                            <div style="font-size:18px; font-weight:800; color:var(--danger);" id="eval-fn">0</div>
+                            <div style="font-size:9px; color:var(--text-muted);">Fault Missed by Monitor</div>
+                        </div>
+                        <div style="background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); border-radius:4px; padding:8px; text-align:center;">
+                            <div style="font-size:9.5px; font-weight:700; color:var(--success);">TRUE NEGATIVES (TN)</div>
+                            <div style="font-size:18px; font-weight:800; color:var(--success);" id="eval-tn">0</div>
+                            <div style="font-size:9px; color:var(--text-muted);">Clean Run / No Alarm</div>
+                        </div>
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; font-size:10px;">
+                        <div style="background:var(--bg-surface); padding:6px; border-radius:4px; text-align:center;">
+                            <div style="color:var(--text-muted); font-weight:600;">PRECISION</div>
+                            <div style="font-size:13px; font-weight:800; color:var(--text-primary);" id="eval-prec">N/A</div>
+                        </div>
+                        <div style="background:var(--bg-surface); padding:6px; border-radius:4px; text-align:center;">
+                            <div style="color:var(--text-muted); font-weight:600;">RECALL (DETECTION)</div>
+                            <div style="font-size:13px; font-weight:800; color:var(--text-primary);" id="eval-rec">N/A</div>
+                        </div>
+                        <div style="background:var(--bg-surface); padding:6px; border-radius:4px; text-align:center;">
+                            <div style="color:var(--text-muted); font-weight:600;">FALSE POSITIVE RT</div>
+                            <div style="font-size:13px; font-weight:800; color:var(--text-primary);" id="eval-fpr">N/A</div>
+                        </div>
+                        <div style="background:var(--bg-surface); padding:6px; border-radius:4px; text-align:center;">
+                            <div style="color:var(--text-muted); font-weight:600;">ACCURACY</div>
+                            <div style="font-size:13px; font-weight:800; color:var(--text-primary);" id="eval-acc">N/A</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:8px; font-size:9.5px; color:var(--text-muted); line-height:1.4;">
+                        * Zero denominators are handled explicitly as N/A per statistical specifications. Injected faults are independently evaluated against monitor detections and persistent alerts.
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="panel">
             <div class="panel-header">
                 <h3 class="panel-title">(8) Test History Table</h3>
@@ -418,7 +565,7 @@ window.render_dashboard = async function(container) {
                             <th>Test ID</th>
                             <th>Trigger Time (Local)</th>
                             <th>Triggered By</th>
-                            <th>Mode</th>
+                            <th>Mode / Profile</th>
                             <th>Strategy</th>
                             <th>Final State</th>
                             <th>Residual Risk</th>
@@ -437,6 +584,7 @@ window.render_dashboard = async function(container) {
     window.addEventListener('ws_credential_update', window.handleWsCredUpdate);
     window.addEventListener('ws_batch_progress', window.handleWsBatchProgress);
     window.addEventListener('ws_shutdown_complete', window.handleWsShutdownComplete);
+    window.addEventListener('ws_scheduler_update', window.handleWsSchedulerUpdate);
 
     await window.loadInitialSettings();
     const toggle = document.getElementById('include-scripted-toggle');
@@ -449,6 +597,7 @@ window.cleanup_dashboard = function() {
     window.removeEventListener('ws_credential_update', window.handleWsCredUpdate);
     window.removeEventListener('ws_batch_progress', window.handleWsBatchProgress);
     window.removeEventListener('ws_shutdown_complete', window.handleWsShutdownComplete);
+    window.removeEventListener('ws_scheduler_update', window.handleWsSchedulerUpdate);
     destroyDashboardCharts();
 };
 
@@ -596,23 +745,115 @@ window.saveSettings = async function() {
     }
 };
 
-window.toggleScheduler = async function(enabled) {
+window.updateSchedulerUI = function(status) {
+    if (!status) return;
+    const isRunning = Boolean(status.running);
+    const schedBadge = document.getElementById('dash-sched-badge');
+    const schedText = document.getElementById('scheduler-status-text');
+    const schedToggle = document.getElementById('scheduler-toggle');
+    const toggleBtn = document.getElementById('dash-sched-toggle-btn');
+
+    if (schedBadge) {
+        schedBadge.textContent = isRunning ? "ON" : "OFF";
+        schedBadge.className = isRunning ? "badge success" : "badge neutral";
+    }
+    if (schedText) {
+        schedText.textContent = isRunning ? "ON" : "OFF";
+        schedText.style.color = isRunning ? "var(--success)" : "var(--text-muted)";
+    }
+    if (schedToggle && schedToggle.checked !== isRunning) {
+        schedToggle.checked = isRunning;
+    }
+    if (toggleBtn) {
+        toggleBtn.textContent = isRunning ? "Pause" : "Resume";
+        toggleBtn.className = isRunning ? "btn-secondary" : "btn-primary";
+    }
+
+    const modeVal = document.getElementById('dash-sched-mode-val');
+    if (modeVal) {
+        const modeName = (status.mode || 'poisson').toUpperCase();
+        const interval = status.mean_interval_seconds ? ` (${status.mean_interval_seconds}s)` : '';
+        modeVal.textContent = `${modeName}${interval}`;
+    }
+
+    const nextVal = document.getElementById('dash-sched-next-val');
+    if (nextVal) {
+        if (!isRunning) {
+            nextVal.textContent = "PAUSED";
+            nextVal.style.color = "var(--text-muted)";
+        } else if (status.next_scheduled_start) {
+            const sec = typeof status.seconds_until_next === 'number' ? Math.round(status.seconds_until_next) : null;
+            nextVal.textContent = (sec !== null && sec >= 0) ? `in ${sec}s` : formatLocalTime(status.next_scheduled_start);
+            nextVal.style.color = "var(--text-primary)";
+        } else {
+            nextVal.textContent = "Calculating...";
+            nextVal.style.color = "var(--text-secondary)";
+        }
+    }
+
+    const statusVal = document.getElementById('dash-sched-status-val');
+    if (statusVal) {
+        const st = status.current_experiment_status || (isRunning ? 'WAITING' : 'IDLE');
+        statusVal.textContent = st;
+        statusVal.style.color = st.includes('RUNNING') ? 'var(--accent-red)' : (st.includes('PAUSED') ? '#f59e0b' : 'var(--text-primary)');
+    }
+
+    const countsVal = document.getElementById('dash-sched-counts-val');
+    if (countsVal) {
+        countsVal.textContent = `${status.completed_experiments_count || 0} / ${status.skipped_attempts_count || 0}`;
+    }
+
+    const pauseVal = document.getElementById('dash-sched-pause-val');
+    if (pauseVal) {
+        pauseVal.textContent = status.pause_reason || (isRunning ? 'Normal randomized testing' : 'Scheduler paused by admin');
+        pauseVal.style.color = status.pause_reason ? 'var(--danger)' : 'var(--text-muted)';
+    }
+
+    const modeSelect = document.getElementById('sched-mode-select');
+    if (modeSelect && status.mode && modeSelect.value !== status.mode) {
+        modeSelect.value = status.mode;
+    }
+};
+
+window.handleWsSchedulerUpdate = function(e) {
+    if (e && e.detail) {
+        window.updateSchedulerUI(e.detail);
+    }
+};
+
+window.toggleScheduler = async function(enabled, mode = null) {
     try {
-        const res = await apiCall('/api/scheduler/toggle', 'POST', { enabled, mode: 'fixed', strategy: 'A' });
-        const schedBadge = document.getElementById('dash-sched-badge');
-        const schedText = document.getElementById('scheduler-status-text');
-        const isRunning = res && res.running;
-        if(schedBadge) {
-            schedBadge.textContent = isRunning ? "ON" : "OFF";
-            schedBadge.style.color = isRunning ? "var(--success)" : "#aaa";
+        if (!mode) {
+            const select = document.getElementById('sched-mode-select');
+            mode = select ? select.value : 'poisson';
         }
-        if(schedText) {
-            schedText.textContent = isRunning ? "ON" : "OFF";
-            schedText.style.color = isRunning ? "var(--success)" : "var(--text-muted)";
-        }
-        window.logConsole(`Scheduler toggled ${isRunning ? 'ON' : 'OFF'}.`);
+        const res = await apiCall('/api/scheduler/toggle', 'POST', { enabled, mode: mode, strategy: 'A' });
+        window.updateSchedulerUI(res);
+        window.logConsole(`Scheduler toggled ${res.running ? 'ON' : 'OFF'} [${res.mode || mode}].`);
     } catch(e) {
         alert("Scheduler toggle failed: " + (e.message || JSON.stringify(e)));
+    }
+};
+
+window.toggleSchedulerFromDash = async function() {
+    try {
+        const status = await apiCall('/api/scheduler/status');
+        const modeSelect = document.getElementById('sched-mode-select');
+        const mode = modeSelect ? modeSelect.value : 'poisson';
+        await window.toggleScheduler(!status.running, mode);
+    } catch(e) {
+        alert("Scheduler toggle error: " + (e.message || JSON.stringify(e)));
+    }
+};
+
+window.changeSchedulerMode = async function(mode) {
+    try {
+        const status = await apiCall('/api/scheduler/status');
+        if (status.running) {
+            await window.toggleScheduler(true, mode);
+        }
+    } catch(e) {
+        console.warn("Could not update mode:", e);
     }
 };
 
@@ -628,14 +869,19 @@ window.refreshDashboard = async function() {
         if (toggle && toggle.checked !== includeScripted) toggle.checked = includeScripted;
         const qParam = includeScripted ? '?include_scripted=true' : '?include_scripted=false';
 
-        const [summary, history, verifyRes, agent, creds, agentStatus] = await Promise.all([
+        const [summary, history, verifyRes, agent, creds, agentStatus, schedStatus] = await Promise.all([
             apiCall(`/api/analytics/summary${qParam}`).catch(() => null),
             apiCall(`/api/shutdown/history${qParam}`).catch(() => null),
             apiCall('/api/shutdown/verify').catch(() => null),
             apiCall('/api/agent').catch(() => null),
             apiCall('/api/agent/credentials').catch(() => null),
-            apiCall('/api/agent/status').catch(() => ({}))
+            apiCall('/api/agent/status').catch(() => ({})),
+            apiCall('/api/scheduler/status').catch(() => null)
         ]);
+
+        if (schedStatus) {
+            window.updateSchedulerUI(schedStatus);
+        }
 
         const hasSummary = summary !== null && summary !== undefined;
         const totalRuns = hasSummary ? (summary.total_shutdowns || 0) : 0;
@@ -961,12 +1207,15 @@ window.refreshDashboard = async function() {
                     const modeBadge = modeVal === 'scripted'
                         ? '<span class="badge warning" style="font-size:10px;">SCRIPTED</span>'
                         : '<span class="badge info" style="font-size:10px;">GEMINI</span>';
+                    const profBadge = h.agent_profile
+                        ? `<div style="font-size:9.5px; color:var(--text-muted); font-family:var(--font-mono);">${h.agent_profile}</div>`
+                        : '';
                     return `
                         <tr style="cursor:pointer;" onclick="openShutdownReport('${h.id}')" title="Click to view Shutdown Report">
                             <td><a href="javascript:void(0)" onclick="event.stopPropagation(); openShutdownReport('${h.id}')" style="font-family:var(--font-mono); color:var(--accent-red); font-weight:700; text-decoration:underline;">${h.id.substring(0,8)}</a></td>
                             <td style="font-size:11px; color:var(--text-muted);">${trigTime}</td>
                             <td><span class="badge neutral" style="font-size:10px;">${h.triggered_by || h.trigger_type || 'manual'}</span></td>
-                            <td>${modeBadge}</td>
+                            <td>${modeBadge}${profBadge}</td>
                             <td style="font-weight:700; color:var(--accent-red);">Strategy ${h.strategy}</td>
                             <td><span class="badge ${badgeClass}" style="font-size:10px;">${h.final_state}</span></td>
                             <td style="font-family:var(--font-mono);">${(h.residual_risk * 100).toFixed(1)}%</td>
@@ -976,6 +1225,8 @@ window.refreshDashboard = async function() {
                 }).join('');
             }
         }
+
+        await window.loadMonitorEvaluation();
     } catch(e) {
         console.error("Dashboard refresh error:", e);
     } finally {
@@ -1017,3 +1268,76 @@ window.handleWsBatchProgress = function(e) {
 window.handleWsShutdownComplete = function(e) {
     window.refreshDashboard();
 };
+
+window.runAdversarialTest = async function() {
+    const btn = document.getElementById('run-adv-test-btn');
+    const statusEl = document.getElementById('adv-run-status');
+    const profile = document.getElementById('adv-profile-select') ? document.getElementById('adv-profile-select').value : 'cooperative';
+    const strategy = document.getElementById('adv-strategy-select') ? document.getElementById('adv-strategy-select').value : 'A';
+    const mode = document.getElementById('adv-mode-select') ? document.getElementById('adv-mode-select').value : 'local';
+    const fault = document.getElementById('adv-fault-select') ? document.getElementById('adv-fault-select').value : 'revocation_failure';
+    const opDur = parseInt(document.getElementById('adv-op-dur') ? document.getElementById('adv-op-dur').value : 150) || 150;
+    const seed = parseInt(document.getElementById('adv-seed') ? document.getElementById('adv-seed').value : 42) || 42;
+    const retries = parseInt(document.getElementById('adv-retries') ? document.getElementById('adv-retries').value : 3) || 3;
+    const backoff = parseInt(document.getElementById('adv-backoff') ? document.getElementById('adv-backoff').value : 50) || 50;
+
+    if (btn) btn.disabled = true;
+    if (statusEl) {
+        statusEl.textContent = `Executing adversarial experiment (${profile}, Strategy ${strategy}, ${mode})...`;
+        statusEl.style.color = "var(--warning)";
+    }
+    window.logConsole(`[ADVERSARIAL] Running test: profile=${profile}, strategy=${strategy}, mode=${mode}, seed=${seed}...`);
+
+    try {
+        const payload = {
+            profile: profile,
+            strategy: strategy,
+            execution_mode: mode,
+            fault_injection_type: fault,
+            operation_duration_ms: opDur,
+            random_seed: seed,
+            retry_limit: retries,
+            retry_backoff_ms: backoff
+        };
+        const res = await apiCall('/api/adversarial/run', 'POST', payload);
+        const evalVerdict = res.evaluation ? res.evaluation.verdict : 'N/A';
+        const leakedCount = (res.leaked_channels || 0) + (res.in_flight_failures || 0);
+        if (statusEl) {
+            statusEl.innerHTML = `Completed! Outcome: <strong>${res.final_state}</strong> | Verdict: <strong>${evalVerdict}</strong> | Leaks: ${leakedCount}`;
+            statusEl.style.color = res.final_state === 'TERMINATED' ? "var(--success)" : "var(--danger)";
+        }
+        window.logConsole(`[ADVERSARIAL] Result: ${res.final_state}, Residual Risk: ${((res.residual_risk || 0) * 100).toFixed(1)}%, Verdict: ${evalVerdict}`);
+    } catch (err) {
+        if (statusEl) {
+            statusEl.textContent = `Experiment failed: ${err.detail || err.message || JSON.stringify(err)}`;
+            statusEl.style.color = "var(--danger)";
+        }
+        window.logConsole(`[ADVERSARIAL] Error: ${err.detail || err.message || JSON.stringify(err)}`);
+    } finally {
+        if (btn) btn.disabled = false;
+        await window.loadMonitorEvaluation();
+        await window.refreshDashboard();
+    }
+};
+
+window.loadMonitorEvaluation = async function() {
+    try {
+        const data = await apiCall('/api/adversarial/evaluation');
+        if (!data || !data.confusion_matrix) return;
+        const cm = data.confusion_matrix;
+        const m = data.metrics || {};
+
+        if (document.getElementById('eval-tp')) document.getElementById('eval-tp').textContent = cm.true_positives;
+        if (document.getElementById('eval-fp')) document.getElementById('eval-fp').textContent = cm.false_positives;
+        if (document.getElementById('eval-fn')) document.getElementById('eval-fn').textContent = cm.false_negatives;
+        if (document.getElementById('eval-tn')) document.getElementById('eval-tn').textContent = cm.true_negatives;
+
+        if (document.getElementById('eval-prec')) document.getElementById('eval-prec').textContent = m.precision_pct != null ? `${m.precision_pct}%` : 'N/A';
+        if (document.getElementById('eval-rec')) document.getElementById('eval-rec').textContent = m.recall_pct != null ? `${m.recall_pct}%` : 'N/A';
+        if (document.getElementById('eval-fpr')) document.getElementById('eval-fpr').textContent = m.false_positive_rate_pct != null ? `${m.false_positive_rate_pct}%` : 'N/A';
+        if (document.getElementById('eval-acc')) document.getElementById('eval-acc').textContent = m.accuracy_pct != null ? `${m.accuracy_pct}%` : 'N/A';
+    } catch (err) {
+        console.warn("Could not load monitor evaluation metrics:", err);
+    }
+};
+

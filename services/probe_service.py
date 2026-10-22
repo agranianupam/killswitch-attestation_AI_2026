@@ -1,5 +1,5 @@
 """
-services/probe_service.py — FR-5: 4 independent probes
+services/probe_service.py - FR-5: 4 independent probes
 """
 
 import asyncio

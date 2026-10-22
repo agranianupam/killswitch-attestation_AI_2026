@@ -4,7 +4,7 @@ import uuid
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from fastapi.testclient import TestClient
 from models.database import Base, get_db
-from models import agent, credential, operation, shutdown_event, experiment, attestation, agent_action, skipped_run
+from models import agent, credential, operation, shutdown_event, experiment, attestation, agent_action, skipped_run, alert, evaluation
 from sqlalchemy.pool import NullPool
 from sqlalchemy import text
 import config
@@ -56,6 +56,11 @@ async def db_session(tmp_path):
     try:
         import services.scheduler_service
         services.scheduler_service.AsyncSessionLocal = TestingSessionLocal
+    except Exception:
+        pass
+    try:
+        import services.alert_service
+        services.alert_service.AsyncSessionLocal = TestingSessionLocal
     except Exception:
         pass
 

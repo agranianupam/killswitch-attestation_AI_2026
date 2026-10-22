@@ -1,5 +1,5 @@
 """
-models/credential.py — Credential ORM model (FR-2, FR-4).
+models/credential.py - Credential ORM model (FR-2, FR-4).
 
 Channel types: api_key, session_token, iam_role, external_tool
 Status values: ACTIVE, REVOKING, REVOKED, REVOCATION_FAILED, EXPIRED

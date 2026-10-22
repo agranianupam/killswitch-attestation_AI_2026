@@ -1,5 +1,5 @@
 """
-models/experiment.py — Experiment + ExperimentResult ORM models (FR-10).
+models/experiment.py - Experiment + ExperimentResult ORM models (FR-10).
 
 Experiment status: RUNNING | COMPLETED | FAILED
 """

@@ -1,6 +1,6 @@
 window.render_audit = async function(container) {
     container.innerHTML = `
-        <!-- Floating Wireframe Background & Crosshairs -->
+        
         <div class="hero-wireframe-bg">
             <svg viewBox="0 0 200 120" fill="none" stroke="#94a3b8" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="120,15 180,35 140,65 80,45" stroke="#cbd5e1" stroke-width="0.8"/>
@@ -12,7 +12,6 @@ window.render_audit = async function(container) {
             </svg>
         </div>
 
-        <!-- Hero Header -->
         <div class="view-hero">
             <div class="hero-text">
                 <div class="hero-kicker">Verifiable Evidence</div>
@@ -30,7 +29,6 @@ window.render_audit = async function(container) {
             </div>
         </div>
 
-        <!-- Section 01: Chain Integrity Status Banner -->
         <div class="section-heading">
             <span class="sec-num">01</span>
             <span class="sec-title">Chain Integrity Status</span>
@@ -39,7 +37,6 @@ window.render_audit = async function(container) {
 
         <div id="verify-result" class="hidden" style="margin-bottom: 25px; padding: 14px 18px; border-radius: 6px; font-weight:600; font-size:12.5px;"></div>
 
-        <!-- Section 02: Attestation Log & Hash-Chain Explorer -->
         <div class="section-heading">
             <span class="sec-num">02</span>
             <span class="sec-title">Ed25519 Attestation Log &amp; Hash-Chain Explorer</span>
@@ -71,7 +68,6 @@ window.render_audit = async function(container) {
             </div>
         </div>
 
-        <!-- Section 03: Administrative Audit Logs -->
         <div class="section-heading">
             <span class="sec-num">03</span>
             <span class="sec-title">Administrative Audit Logs</span>

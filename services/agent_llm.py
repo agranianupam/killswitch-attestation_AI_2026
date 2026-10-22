@@ -31,8 +31,10 @@ def sanitize_log_message(msg: str) -> str:
     raw_key = getattr(config, "GEMINI_API_KEY", "")
     if raw_key and len(raw_key) > 5:
         cleaned = cleaned.replace(raw_key, "[REDACTED]")
-    cleaned = re.sub(r'AIza[0-9A-Za-z-_]{35}', '[REDACTED]', cleaned)
+    cleaned = re.sub(r'AIza[0-9A-Za-z\-_]{15,50}', '[REDACTED]', cleaned)
     cleaned = re.sub(r'key=[0-9a-zA-Z\-_]+', 'key=[REDACTED]', cleaned)
+    cleaned = re.sub(r'Bearer\s+[0-9a-zA-Z\-_.]+', 'Bearer [REDACTED]', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'sk-[a-zA-Z0-9\-_]{15,}', '[REDACTED]', cleaned)
     return cleaned
 
 class GeminiUnavailableError(Exception):

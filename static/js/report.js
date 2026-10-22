@@ -3,7 +3,7 @@ let isReportLoading = false;
 window.render_report = async function(container) {
     const currentId = State.latestShutdownId ? String(State.latestShutdownId).trim() : '';
     container.innerHTML = `
-        <!-- Floating Wireframe Background & Crosshairs -->
+        
         <div class="hero-wireframe-bg">
             <svg viewBox="0 0 200 120" fill="none" stroke="#94a3b8" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="120,15 180,35 140,65 80,45" stroke="#cbd5e1" stroke-width="0.8"/>
@@ -15,7 +15,6 @@ window.render_report = async function(container) {
             </svg>
         </div>
 
-        <!-- Hero Header -->
         <div class="view-hero">
             <div class="hero-text">
                 <div class="hero-kicker">Incident Inspection</div>
@@ -31,7 +30,6 @@ window.render_report = async function(container) {
             </div>
         </div>
 
-        <!-- Section 01: Incident Lookup -->
         <div class="section-heading">
             <span class="sec-num">01</span>
             <span class="sec-title">Incident Event Lookup</span>
@@ -61,15 +59,15 @@ window.render_report = async function(container) {
             content.innerHTML = `
                 <div class="panel" style="padding: 45px 25px; text-align: center;">
                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; max-width: 650px; margin: 0 auto;">
-                        <!-- Line 1: Title -->
+                        
                         <h3 style="margin: 0; color: var(--text-primary); font-size: 17px; font-weight: 700; display: block; width: 100%;">
                             No Run Selected
                         </h3>
-                        <!-- Line 2: Description -->
+                        
                         <p style="margin: 0; font-size: 13.5px; color: var(--text-muted); line-height: 1.5; display: block; width: 100%;">
                             Enter a Shutdown Event ID above or select any run from the Test History table on the Live Dashboard.
                         </p>
-                        <!-- Line 3: Action Button -->
+                        
                         <div style="margin-top: 6px; display: block; width: 100%;">
                             <button class="btn-secondary" onclick="loadView('dashboard')" style="padding: 8px 22px; font-size: 12px; font-weight: 600;">
                                 Go to Dashboard
@@ -155,7 +153,7 @@ window.loadReport = async function(customId) {
         `).join('');
 
         const actionsSection = actions ? `
-            <!-- Section 05: Agent Activity Telemetry -->
+            
             <div class="section-heading">
                 <span class="sec-num">05</span>
                 <span class="sec-title">In-Flight Agent Activity Telemetry</span>
@@ -186,7 +184,7 @@ window.loadReport = async function(customId) {
                 </div>
             </div>
         ` : `
-            <!-- Section 05: Agent Activity Telemetry -->
+            
             <div class="section-heading">
                 <span class="sec-num">05</span>
                 <span class="sec-title">In-Flight Agent Activity Telemetry</span>
@@ -203,7 +201,7 @@ window.loadReport = async function(customId) {
         let attestationBlock = '';
         if (report.attestation) {
             attestationBlock = `
-                <!-- Section 04: Cryptographic Attestation -->
+                
                 <div class="section-heading">
                     <span class="sec-num">04</span>
                     <span class="sec-title">Cryptographic Attestation Evidence</span>
@@ -241,7 +239,7 @@ window.loadReport = async function(customId) {
             `;
         } else {
             attestationBlock = `
-                <!-- Section 04: Cryptographic Attestation -->
+                
                 <div class="section-heading">
                     <span class="sec-num">04</span>
                     <span class="sec-title">Cryptographic Attestation Evidence</span>
@@ -261,7 +259,7 @@ window.loadReport = async function(customId) {
         }
 
         content.innerHTML = `
-            <!-- Section 02: Incident Summary & Telemetry -->
+            
             <div class="section-heading">
                 <span class="sec-num">02</span>
                 <span class="sec-title">Incident Summary &amp; Execution Telemetry</span>
@@ -343,7 +341,6 @@ window.loadReport = async function(customId) {
                 </div>
             </div>
 
-            <!-- Section 03: Multi-Channel Revocations -->
             <div class="section-heading">
                 <span class="sec-num">03</span>
                 <span class="sec-title">Multi-Channel Revocation Breakdown</span>

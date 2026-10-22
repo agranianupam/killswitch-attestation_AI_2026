@@ -14,7 +14,7 @@ class Base(DeclarativeBase):
     pass
 
 async def init_db() -> None:
-    from models import agent, credential, operation, shutdown_event, experiment, attestation, agent_action, skipped_run
+    from models import agent, credential, operation, shutdown_event, experiment, attestation, agent_action, skipped_run, alert, evaluation
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         shutdown_columns_to_add = [
@@ -34,7 +34,12 @@ async def init_db() -> None:
             ("last_channel_revoked_at", "DATETIME NULL"),
             ("attestation_written_at", "DATETIME NULL"),
             ("random_seed", "INTEGER NULL"),
-            ("cycle_start_gap_seconds", "FLOAT NULL")
+            ("cycle_start_gap_seconds", "FLOAT NULL"),
+            ("agent_profile", "VARCHAR DEFAULT 'cooperative'"),
+            ("monitor_detected_leak", "BOOLEAN NULL"),
+            ("expected_leak", "BOOLEAN NULL"),
+            ("evaluation_verdict", "VARCHAR NULL"),
+            ("evaluation_details", "TEXT NULL")
         ]
         for col_name, col_type in shutdown_columns_to_add:
             try:
@@ -57,6 +62,50 @@ async def init_db() -> None:
                 await conn.execute(text(f"ALTER TABLE agent_actions ADD COLUMN {col_name} {col_type}"))
             except Exception:
                 pass
+
+        eval_columns_to_add = [
+            ("ground_truth_label", "VARCHAR DEFAULT 'UNRESOLVED'")
+        ]
+        for col_name, col_type in eval_columns_to_add:
+            try:
+                await conn.execute(text(f"ALTER TABLE evaluation_records ADD COLUMN {col_name} {col_type}"))
+            except Exception:
+                pass
+
+        try:
+            await conn.execute(text("""
+                UPDATE evaluation_records
+                SET ground_truth_label = 'ANOMALY'
+                WHERE (ground_truth_label IS NULL OR ground_truth_label = 'UNRESOLVED')
+                  AND (
+                      observed_outcome LIKE '%LEAK%'
+                      OR observed_outcome LIKE '%FAILED%'
+                      OR observed_outcome LIKE '%TAMPER%'
+                  )
+            """))
+            await conn.execute(text("""
+                UPDATE evaluation_records
+                SET ground_truth_label = 'ANOMALY'
+                WHERE (ground_truth_label IS NULL OR ground_truth_label = 'UNRESOLVED')
+                  AND shutdown_event_id IN (
+                      SELECT id FROM shutdown_events
+                      WHERE in_flight_failures > 0 OR leaked_channels > 0
+                  )
+            """))
+            await conn.execute(text("""
+                UPDATE evaluation_records
+                SET ground_truth_label = 'NORMAL'
+                WHERE (ground_truth_label IS NULL OR ground_truth_label = 'UNRESOLVED')
+                  AND observed_outcome = 'CLEAN_CONTAINMENT'
+                  AND shutdown_event_id IN (
+                      SELECT id FROM shutdown_events
+                      WHERE (in_flight_failures = 0 OR in_flight_failures IS NULL)
+                        AND (leaked_channels = 0 OR leaked_channels IS NULL)
+                        AND (partial_failure = 0 OR partial_failure IS NULL)
+                  )
+            """))
+        except Exception:
+            pass
 
 async def get_db():
     async with AsyncSessionLocal() as session:

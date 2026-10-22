@@ -7,6 +7,10 @@ from models.operation import SimulatedOperation
 from models.skipped_run import SkippedRun
 from services.quota_service import get_calls_today, is_budget_paused, get_tokens_today
 
+from fastapi.responses import PlainTextResponse
+from models.attestation import AttestationEntry
+from models.evaluation import EvaluationRecord
+
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 @router.get("/summary")
@@ -476,3 +480,91 @@ async def get_exposure_analytics(include_scripted: bool = Query(False), db: Asyn
         "total_leaked_channels": total_leaked_channels,
         "strategies": strategies_summary
     }
+
+@router.get("/export/csv")
+async def export_analytics_csv(
+    include_scripted: bool = Query(True),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Exports full shutdown and adversarial experimental dataset as CSV, preserving:
+    - execution_mode (local vs gemini)
+    - agent_profile and configuration
+    - shutdown strategy
+    - random_seed
+    - expected_condition vs observed_outcome
+    - monitor_detected and classification
+    - evaluation_verdict
+    - leak and containment metrics
+    - attestation_id and hash
+    """
+    import csv
+    import io
+
+    query = select(ShutdownEvent).order_by(ShutdownEvent.started_at.desc())
+    if not include_scripted:
+        query = query.where(func.lower(ShutdownEvent.agent_mode) == "gemini")
+    events_res = await db.execute(query)
+    events = events_res.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    headers = [
+        "id", "agent_id", "agent_mode", "agent_profile", "agent_model", "strategy",
+        "trigger_type", "triggered_by", "started_at", "finished_at", "final_state",
+        "residual_risk", "leaked_channels", "in_flight_failures", "actions_started",
+        "actions_running", "actions_completed", "total_revocation_ms", "retries_total",
+        "random_seed", "expected_condition", "ground_truth_label", "observed_outcome", "monitor_detected",
+        "monitor_classification", "evaluation_verdict", "attestation_id"
+    ]
+    writer.writerow(headers)
+
+    for e in events:
+        eval_res = await db.execute(
+            select(EvaluationRecord).where(EvaluationRecord.shutdown_event_id == e.id)
+        )
+        ev = eval_res.scalar_one_or_none()
+
+        att_res = await db.execute(
+            select(AttestationEntry.id).where(AttestationEntry.shutdown_event_id == e.id)
+        )
+        att_id = att_res.scalar() or ""
+
+        writer.writerow([
+            e.id,
+            e.agent_id,
+            e.agent_mode,
+            getattr(e, "agent_profile", None) or (ev.agent_profile if ev else "default"),
+            getattr(e, "agent_model", None) or "none",
+            e.strategy,
+            e.trigger_type,
+            e.triggered_by or "",
+            e.started_at.isoformat() if e.started_at else "",
+            e.finished_at.isoformat() if e.finished_at else "",
+            e.final_state,
+            f"{e.residual_risk:.4f}" if e.residual_risk is not None else "",
+            e.leaked_channels or 0,
+            e.in_flight_failures or 0,
+            e.actions_started or 0,
+            e.actions_running or 0,
+            e.actions_completed or 0,
+            f"{e.total_revocation_ms:.2f}" if getattr(e, "total_revocation_ms", None) else "",
+            getattr(e, "retries_total", 0) or 0,
+            getattr(e, "random_seed", "") or "",
+            ev.expected_condition if ev else (getattr(e, "expected_leak", "") or ""),
+            getattr(ev, "ground_truth_label", "NORMAL") if ev else ("ANOMALY" if (e.leaked_channels or e.in_flight_failures) else "NORMAL"),
+            ev.observed_outcome if ev else ("LEAK" if (e.leaked_channels or e.in_flight_failures) else "NO_LEAK"),
+            str(ev.monitor_detected) if ev else str(getattr(e, "monitor_detected_leak", "")),
+            ev.monitor_classification if ev else "",
+            ev.verdict if ev else (getattr(e, "evaluation_verdict", "") or ""),
+            att_id
+        ])
+
+    csv_content = output.getvalue()
+    return PlainTextResponse(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=killswitch_dataset_export.csv"}
+    )
+

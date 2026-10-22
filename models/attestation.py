@@ -1,5 +1,5 @@
 """
-models/attestation.py — AuditLog + AttestationEntry ORM models (FR-8, FR-13).
+models/attestation.py - AuditLog + AttestationEntry ORM models (FR-8, FR-13).
 
 Hash-chain rule:
     entry_hash = SHA-256(payload_json + signature_hex + prev_hash)

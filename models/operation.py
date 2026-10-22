@@ -1,5 +1,5 @@
 """
-models/operation.py — SimulatedOperation ORM model (FR-3).
+models/operation.py - SimulatedOperation ORM model (FR-3).
 
 Seven operation types defined as constants.
 Status values: RUNNING, COMPLETED, BLOCKED, CANCELLED, COMPLETED_AFTER_SHUTDOWN

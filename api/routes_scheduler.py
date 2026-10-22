@@ -8,15 +8,28 @@ class SchedulerToggleRequest(BaseModel):
     enabled: bool
     mode: str = "poisson"
     strategy: str = "A"
+    agent_profile: str = "default"
+    agent_mode: str | None = None
 
 @router.post("/start")
-async def api_start_scheduler(mode: str, strategy: str):
+async def api_start_scheduler(
+    mode: str = "poisson",
+    strategy: str = "A",
+    agent_profile: str = "default",
+    agent_mode: str | None = None
+):
     if mode not in ("poisson", "heavy_tailed"):
         raise HTTPException(status_code=400, detail="Invalid mode. Must be poisson or heavy_tailed.")
     if strategy not in ("A", "B", "C"):
         raise HTTPException(status_code=400, detail="Invalid strategy")
-    start_scheduler(mode, strategy)
-    return {"status": "Scheduler started", "mode": mode, "strategy": strategy}
+    start_scheduler(mode, strategy, agent_profile=agent_profile, agent_mode=agent_mode)
+    return {
+        "status": "Scheduler started",
+        "mode": mode,
+        "strategy": strategy,
+        "agent_profile": agent_profile,
+        "agent_mode": agent_mode
+    }
 
 @router.post("/stop")
 async def api_stop_scheduler():
@@ -25,16 +38,27 @@ async def api_stop_scheduler():
 
 @router.post("/toggle")
 async def api_toggle_scheduler(req: SchedulerToggleRequest):
+    mode = req.mode if req.mode in ("poisson", "heavy_tailed") else "poisson"
+    strategy = req.strategy if req.strategy in ("A", "B", "C") else "A"
     if req.enabled:
-        if req.mode not in ("poisson", "heavy_tailed"):
-            raise HTTPException(status_code=400, detail="Invalid mode. Must be poisson or heavy_tailed.")
-        if req.strategy not in ("A", "B", "C"):
-            raise HTTPException(status_code=400, detail="Invalid strategy")
-        start_scheduler(req.mode, req.strategy)
-        return {"status": "Scheduler started", "running": True, "mode": req.mode, "strategy": req.strategy}
+        start_scheduler(
+            mode,
+            strategy,
+            agent_profile=req.agent_profile,
+            agent_mode=req.agent_mode
+        )
+        return {
+            "status": "Scheduler started",
+            "running": True,
+            "mode": mode,
+            "strategy": strategy,
+            "agent_profile": req.agent_profile,
+            "agent_mode": req.agent_mode
+        }
     else:
         stop_scheduler()
         return {"status": "Scheduler stopped", "running": False}
+
 
 @router.get("/status")
 async def api_scheduler_status():

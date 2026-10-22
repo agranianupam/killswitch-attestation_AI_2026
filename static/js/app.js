@@ -50,6 +50,8 @@ function init() {
     initTheme();
     setupNavigation();
     setupWebSocket();
+    setupAlertListeners();
+    loadAlerts();
     loadView('dashboard');
 }
 
@@ -184,8 +186,151 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 }
 window.apiCall = apiCall;
 
+async function loadAlerts() {
+    try {
+        const res = await apiCall('/api/alerts?unacknowledged_only=true&limit=15');
+        const alerts = res.alerts || [];
+        renderAlerts(alerts);
+        updateAlertBadge(alerts.length);
+    } catch (err) {
+        console.warn("Failed to load persistent alerts:", err);
+    }
+}
+window.loadAlerts = loadAlerts;
+
+function updateAlertBadge(count) {
+    const badge = document.getElementById('sidebar-alert-badge');
+    if (!badge) return;
+    badge.textContent = count;
+    if (count > 0) {
+        badge.style.background = 'var(--danger)';
+        badge.style.color = '#ffffff';
+        badge.style.borderColor = 'var(--danger)';
+    } else {
+        badge.style.background = 'var(--bg-card)';
+        badge.style.color = 'var(--text-muted)';
+        badge.style.borderColor = 'var(--border-light)';
+    }
+}
+
+function renderAlerts(alerts) {
+    const container = document.getElementById('system-alert-container');
+    if (!container) return;
+
+    if (!alerts || alerts.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    container.innerHTML = alerts.map(a => createAlertHtml(a)).join('');
+}
+window.renderAlerts = renderAlerts;
+
+function createAlertHtml(a) {
+    const sev = (a.severity || 'info').toLowerCase();
+    const timeStr = window.formatLocalTime(a.created_at);
+    const expLink = a.experiment_id ? 
+        `<button class="btn-ack" onclick="window.openShutdownReport('${a.experiment_id}')" style="margin-right:6px; color:var(--text-primary);">Inspect Run →</button>` : '';
+
+    return `
+        <div class="alert-card ${sev}" id="alert-card-${a.id}">
+            <div class="alert-main">
+                <div class="alert-header-row">
+                    <span class="alert-badge ${sev}">${sev}</span>
+                    <span class="alert-title">${escapeHtml(a.title || 'Security Notice')}</span>
+                    <span class="alert-time">${timeStr}</span>
+                </div>
+                <div class="alert-message">${escapeHtml(a.message || '')}</div>
+                ${a.recommended_action ? `<div class="alert-action-rec"><span>Action:</span> ${escapeHtml(a.recommended_action)}</div>` : ''}
+            </div>
+            <div class="alert-controls">
+                ${expLink}
+                <button class="btn-ack" onclick="window.ackAlert('${a.id}')">Dismiss</button>
+            </div>
+        </div>
+    `;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+window.prependAlert = function(alertData) {
+    const container = document.getElementById('system-alert-container');
+    if (!container) return;
+
+    const existing = document.getElementById(`alert-card-${alertData.id}`);
+    if (existing) return;
+
+    const html = createAlertHtml(alertData);
+    container.insertAdjacentHTML('afterbegin', html);
+
+    const badge = document.getElementById('sidebar-alert-badge');
+    if (badge) {
+        const cur = parseInt(badge.textContent) || 0;
+        updateAlertBadge(cur + 1);
+    }
+};
+
+window.ackAlert = async function(alertId) {
+    try {
+        await apiCall(`/api/alerts/${alertId}/ack`, 'POST');
+        const el = document.getElementById(`alert-card-${alertId}`);
+        if (el) el.remove();
+
+        const badge = document.getElementById('sidebar-alert-badge');
+        if (badge) {
+            const cur = Math.max(0, (parseInt(badge.textContent) || 1) - 1);
+            updateAlertBadge(cur);
+        }
+    } catch (err) {
+        console.error("Failed to acknowledge alert:", err);
+    }
+};
+
+window.clearAllAlerts = async function() {
+    try {
+        await apiCall('/api/alerts/clear', 'POST');
+        const container = document.getElementById('system-alert-container');
+        if (container) container.innerHTML = '';
+        updateAlertBadge(0);
+    } catch (err) {
+        console.error("Failed to clear alerts:", err);
+    }
+};
+
+function setupAlertListeners() {
+    window.addEventListener('ws_new_alert', (e) => {
+        if (e.detail) {
+            window.prependAlert(e.detail);
+        }
+    });
+
+    window.addEventListener('ws_scheduler_update', (e) => {
+        if (e.detail) {
+            const data = e.detail;
+            const toggle = document.getElementById('scheduler-toggle');
+            const text = document.getElementById('scheduler-status-text');
+            if (toggle && toggle.checked !== data.running) {
+                toggle.checked = data.running;
+            }
+            if (text) {
+                text.textContent = data.running ? "ON" : "OFF";
+                text.style.color = data.running ? "var(--success)" : "var(--text-muted)";
+            }
+        }
+    });
+}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
 }
+

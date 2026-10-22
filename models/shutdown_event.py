@@ -38,6 +38,11 @@ class ShutdownEvent(Base):
     attestation_written_at = Column(DateTime, nullable=True)
     random_seed = Column(Integer, nullable=True)
     cycle_start_gap_seconds = Column(Float, nullable=True)
+    agent_profile = Column(String, default="cooperative", nullable=True)
+    monitor_detected_leak = Column(Boolean, nullable=True)
+    expected_leak = Column(Boolean, nullable=True)
+    evaluation_verdict = Column(String, nullable=True)
+    evaluation_details = Column(String, nullable=True)
 
 class RevocationEvent(Base):
     __tablename__ = "revocation_events"

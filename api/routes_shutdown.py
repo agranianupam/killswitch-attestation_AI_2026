@@ -106,10 +106,24 @@ async def verify_chain_endpoint(db: AsyncSession = Depends(get_db)):
         public_key = load_public_key()
         res = await verify_chain(db, public_key)
         is_valid = res.get("valid", False)
+        if not is_valid:
+            try:
+                from services.alert_service import create_alert
+                await create_alert(
+                    severity="critical",
+                    category="attestation",
+                    title="Cryptographic Chain Broken",
+                    message=f"Tampering detected at block index #{res.get('first_failure_index')}. Attestation hash chain or Ed25519 signature is invalid.",
+                    recommended_action="Inspect the cryptographic ledger for unauthorized database modifications.",
+                    db=db
+                )
+            except Exception:
+                pass
         return {
             "status": "valid" if is_valid else "invalid",
             "valid": is_valid,
             "entries_checked": res.get("entries_checked", 0),
+            "first_failure_index": res.get("first_failure_index"),
             "message": "Chain verified successfully" if is_valid else f"Broken chain at entry index {res.get('first_failure_index')}"
         }
     except Exception as e:

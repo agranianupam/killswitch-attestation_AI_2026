@@ -9,7 +9,14 @@ async def get_credentials(db: AsyncSession, agent_id: str):
     result = await db.execute(select(Credential).where(Credential.agent_id == agent_id))
     return result.scalars().all()
 
-async def revoke_credential(db: AsyncSession, credential_id: str, rng=None) -> dict:
+async def revoke_credential(
+    db: AsyncSession,
+    credential_id: str,
+    rng=None,
+    failure_prob: float | None = None,
+    delay_min: int | None = None,
+    delay_max: int | None = None
+) -> dict:
     t0 = time.perf_counter()
     result = await db.execute(select(Credential).where(Credential.id == credential_id))
     cred = result.scalar_one_or_none()
@@ -24,9 +31,11 @@ async def revoke_credential(db: AsyncSession, credential_id: str, rng=None) -> d
     await db.commit()
 
     rng = rng if rng is not None else config.get_rng()
-    delay_min = max(0, min(config.NET_DELAY_MIN, config.NET_DELAY_MAX))
-    delay_max = max(delay_min, max(config.NET_DELAY_MIN, config.NET_DELAY_MAX))
-    delay_ms = rng.randint(delay_min, delay_max) if delay_max > 0 else 0
+    cfg_dmin = delay_min if delay_min is not None else config.NET_DELAY_MIN
+    cfg_dmax = delay_max if delay_max is not None else config.NET_DELAY_MAX
+    d_min = max(0, min(cfg_dmin, cfg_dmax))
+    d_max = max(d_min, max(cfg_dmin, cfg_dmax))
+    delay_ms = rng.randint(d_min, d_max) if d_max > 0 else 0
 
     if cred.channel_type == "iam_role":
         delay_ms = int(delay_ms * config.IAM_DELAY_MULT)
@@ -40,12 +49,14 @@ async def revoke_credential(db: AsyncSession, credential_id: str, rng=None) -> d
     failed = False
     error_msg = None
 
+    effective_prob = failure_prob if failure_prob is not None else config.REVOKE_FAILURE_PROB
     if cred.channel_type == "iam_role":
-        if rng.random() < config.IAM_FAILURE_PROB:
+        iam_prob = failure_prob if failure_prob is not None else config.IAM_FAILURE_PROB
+        if rng.random() < iam_prob:
             failed = True
             error_msg = "IAM propagation timeout or permission denied"
     else:
-        if rng.random() < config.REVOKE_FAILURE_PROB:
+        if rng.random() < effective_prob:
             failed = True
             error_msg = "Generic revocation failure"
 
