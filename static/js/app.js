@@ -2,7 +2,7 @@ const State = {
     currentView: 'dashboard',
     ws: null,
     latestShutdownId: null,
-    includeScripted: false
+    includeScripted: true
 };
 
 function applyChartTheme() {

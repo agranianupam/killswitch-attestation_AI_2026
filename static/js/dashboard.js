@@ -96,7 +96,7 @@ window.render_dashboard = async function(container) {
                     </div>
 
                     <label class="scripted-checkbox-label" style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:12px; margin-bottom:8px;">
-                        <input type="checkbox" id="include-scripted-toggle" onchange="State.includeScripted = this.checked; window.refreshDashboard();">
+                        <input type="checkbox" id="include-scripted-toggle" ${State.includeScripted ? 'checked' : ''} onchange="State.includeScripted = this.checked; window.refreshDashboard();">
                         <span>Include Agent XYZ runs</span>
                     </label>
 
@@ -721,6 +721,12 @@ const SCENARIO_DESCRIPTIONS = {
 };
 
 window.onAgentModeChange = function(mode) {
+    if (mode === 'agent_xyz') {
+        State.includeScripted = true;
+        const toggle = document.getElementById('include-scripted-toggle');
+        if (toggle) toggle.checked = true;
+        window.refreshDashboard();
+    }
     const scWrap = document.getElementById('scenario-selector-wrap');
     const titleEl = document.getElementById('scenario-preview-title');
     const tagEl = document.getElementById('scenario-preview-tag');
@@ -767,6 +773,12 @@ window.runManualShutdown = async function() {
     const modeSelect = document.getElementById('dash-agent-mode-select');
     const selectedMode = modeSelect ? modeSelect.value : 'agent_xyz';
 
+    if (selectedMode === 'agent_xyz') {
+        State.includeScripted = true;
+        const toggle = document.getElementById('include-scripted-toggle');
+        if (toggle) toggle.checked = true;
+    }
+
     const scSelect = document.getElementById('dash-scenario-select');
     const selectedScenario = (selectedMode === 'agent_xyz' && scSelect) ? scSelect.value : null;
 
@@ -811,6 +823,14 @@ window.runNTests = async function() {
     const runNBtn = document.getElementById('run-n-btn');
     const stratSelect = document.getElementById('strategy-select');
     const strategy = stratSelect ? stratSelect.value : 'A';
+
+    const modeSelect = document.getElementById('dash-agent-mode-select');
+    const selectedMode = modeSelect ? modeSelect.value : 'agent_xyz';
+    if (selectedMode === 'agent_xyz') {
+        State.includeScripted = true;
+        const toggle = document.getElementById('include-scripted-toggle');
+        if (toggle) toggle.checked = true;
+    }
 
     if(btn) btn.disabled = true;
     if(runNBtn) runNBtn.disabled = true;
