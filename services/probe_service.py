@@ -71,8 +71,13 @@ async def run_all_probes(db: AsyncSession, credentials: list[Credential]) -> dic
     if not tasks:
         return results
 
-    coros = [t[1] for t in tasks]
-    raw_results = await asyncio.gather(*coros, return_exceptions=True)
+    raw_results = []
+    for cred_id, coro in tasks:
+        try:
+            res = await coro
+            raw_results.append(res)
+        except Exception as exc:
+            raw_results.append(exc)
 
     for i, (cred_id, _) in enumerate(tasks):
         outcome = raw_results[i]

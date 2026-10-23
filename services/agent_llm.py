@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import random
 import re
 import time
@@ -45,7 +46,7 @@ class GeminiUnavailableError(Exception):
 
 def make_client():
     key = getattr(config, "GEMINI_API_KEY", "")
-    if not key or key == "PASTE_YOUR_GEMINI_API_KEY_HERE":
+    if key == "PASTE_YOUR_GEMINI_API_KEY_HERE":
         if hasattr(config, "reload_env"):
             config.reload_env()
         key = getattr(config, "GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")

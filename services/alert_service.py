@@ -16,6 +16,7 @@ async def create_alert(
     recommended_action: Optional[str] = None,
     experiment_id: Optional[str] = None,
     channel_or_op_id: Optional[str] = None,
+    scenario_id: Optional[str] = None,
     db: Optional[AsyncSession] = None
 ) -> dict:
     clean_msg = sanitize_log_message(message)
@@ -32,6 +33,7 @@ async def create_alert(
         recommended_action=clean_rec,
         experiment_id=experiment_id,
         channel_or_op_id=channel_or_op_id,
+        scenario_id=scenario_id,
         acknowledged=False,
         created_at=utcnow()
     )
@@ -83,12 +85,41 @@ async def acknowledge_alert(alert_id: str) -> bool:
         if not alert:
             return False
         alert.acknowledged = True
+
+        if alert.experiment_id:
+            related_res = await session.execute(
+                select(Alert).where(
+                    Alert.experiment_id == alert.experiment_id,
+                    Alert.acknowledged == False
+                )
+            )
+            for rel in related_res.scalars().all():
+                rel.acknowledged = True
+
         await session.commit()
 
         try:
             await manager.broadcast({
                 "type": "alert_acknowledged",
-                "data": {"id": alert_id}
+                "data": {"id": alert_id, "experiment_id": alert.experiment_id}
+            })
+        except Exception:
+            pass
+        return True
+
+async def acknowledge_alerts_by_experiment(experiment_id: str) -> bool:
+    async with models.database.AsyncSessionLocal() as session:
+        res = await session.execute(select(Alert).where(Alert.experiment_id == experiment_id))
+        alerts = res.scalars().all()
+        if not alerts:
+            return False
+        for a in alerts:
+            a.acknowledged = True
+        await session.commit()
+        try:
+            await manager.broadcast({
+                "type": "alert_acknowledged",
+                "data": {"experiment_id": experiment_id}
             })
         except Exception:
             pass
@@ -125,3 +156,81 @@ async def get_alerts_summary() -> dict:
             "warning": counts.get("warning", 0),
             "info": counts.get("info", 0)
         }
+
+async def get_active_critical_incident() -> Optional[dict]:
+    """
+    Finds the latest unacknowledged critical incident, enriched with
+    associated shutdown event metadata (agent mode, scenario, verification, residual risk).
+    """
+    from models.shutdown_event import ShutdownEvent
+    async with models.database.AsyncSessionLocal() as session:
+        query = (
+            select(Alert)
+            .where(
+                Alert.severity == "critical",
+                Alert.category == "critical_emergency",
+                Alert.acknowledged == False
+            )
+            .order_by(Alert.created_at.desc())
+            .limit(1)
+        )
+        res = await session.execute(query)
+        alert = res.scalar_one_or_none()
+        if not alert:
+            query_fb = (
+                select(Alert)
+                .where(Alert.severity == "critical", Alert.acknowledged == False)
+                .order_by(Alert.created_at.desc())
+                .limit(1)
+            )
+            res_fb = await session.execute(query_fb)
+            alert = res_fb.scalar_one_or_none()
+            if not alert:
+                return None
+
+        alert_data = alert.to_dict()
+        sh_event = None
+        if alert.experiment_id:
+            sh_res = await session.execute(select(ShutdownEvent).where(ShutdownEvent.id == alert.experiment_id))
+            sh_event = sh_res.scalar_one_or_none()
+
+        mode_str = sh_event.agent_mode if sh_event else "gemini"
+        is_sim = str(mode_str).lower() in ("scripted", "agent_xyz", "offline")
+        agent_name = "Agent XYZ (Simulation)" if is_sim else "Gemini Live Agent"
+
+        scenario_name = getattr(sh_event, "scenario_name", None) or getattr(alert, "scenario_id", None) or "Deterministic Simulation Scenario"
+        run_id = alert.experiment_id or alert.id
+        incident_id = f"incident_{run_id}"
+
+        verif_status = "Access remains available"
+        if sh_event:
+            if (sh_event.leaked_channels or 0) > 0 and (sh_event.in_flight_failures or 0) > 0:
+                verif_status = "Access remains available & In-Flight Cutoff Violated"
+            elif (sh_event.leaked_channels or 0) > 0:
+                verif_status = "Access remains available (Liveness Probe Confirmed)"
+            elif (sh_event.in_flight_failures or 0) > 0:
+                verif_status = "Cutoff Violated (Operation Completed After Shutdown)"
+            elif sh_event.partial_failure:
+                verif_status = "Revocation Attempt Failed"
+
+        return {
+            "id": alert.id,
+            "incident_id": incident_id,
+            "alert_id": alert.id,
+            "run_id": run_id,
+            "event_id": run_id,
+            "agent_name": agent_name,
+            "agent_mode": mode_str,
+            "scenario_id": getattr(sh_event, "scenario_id", None) or getattr(alert, "scenario_id", None),
+            "scenario_name": scenario_name,
+            "severity": "CRITICAL",
+            "title": alert.title,
+            "failure_reason": alert.message,
+            "affected_channel": alert.channel_or_op_id or "Revocation Subsystem",
+            "verification_status": verif_status,
+            "final_state": sh_event.final_state if sh_event else "CONTAINMENT_FAILED",
+            "residual_risk": sh_event.residual_risk if sh_event else 0.70,
+            "created_at": alert.created_at.isoformat() if alert.created_at else None,
+            "recommended_action": alert.recommended_action
+        }
+

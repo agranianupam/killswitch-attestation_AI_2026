@@ -34,8 +34,8 @@ window.render_analytics = async function(container) {
                     <td style="font-family:var(--font-mono); color:var(--accent-red); font-weight:700;">${g.gap_seconds}s</td>
                     <td><span class="badge neutral" style="font-size:9px;">SCHEDULER</span></td>
                     <td>
-                        <span class="badge ${(g.agent_mode || 'gemini').toLowerCase() === 'scripted' ? 'warning' : 'info'}" style="font-size:9px;">
-                            ${(g.agent_mode || 'gemini').toUpperCase()}
+                        <span class="badge ${['scripted', 'agent_xyz'].includes((g.agent_mode || 'gemini').toLowerCase()) ? 'warning' : 'info'}" style="font-size:9px;">
+                            ${['scripted', 'agent_xyz'].includes((g.agent_mode || 'gemini').toLowerCase()) ? 'AGENT XYZ (SIMULATION)' : 'GEMINI LIVE'}
                         </span>
                     </td>
                     <td style="font-size:11px; color:var(--text-muted);">${formatLocalTime(g.timestamp)}</td>

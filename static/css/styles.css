@@ -682,6 +682,74 @@ button {
     transform: none;
 }
 
+.scenario-preview-card {
+    background: rgba(24, 24, 27, 0.7);
+    border: 1px solid var(--border-light);
+    border-left: 3px solid var(--accent-red);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 11.5px;
+    line-height: 1.35;
+    flex: 1 1 320px;
+    min-width: 240px;
+    max-width: 500px;
+    box-sizing: border-box;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+body.dark-theme .scenario-preview-card {
+    background: rgba(24, 24, 27, 0.75);
+    border-color: #27272a;
+    border-left-color: var(--accent-red);
+}
+
+.scenario-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
+.scenario-preview-title {
+    color: var(--text-primary);
+    font-size: 11.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.scenario-preview-card .badge {
+    font-size: 9.5px;
+    padding: 2px 6px;
+    flex-shrink: 0;
+    letter-spacing: 0.3px;
+}
+
+.scenario-preview-desc {
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.35;
+    margin-bottom: 2px;
+    word-break: break-word;
+}
+
+.scenario-preview-expected {
+    color: var(--text-muted);
+    font-size: 10px;
+    line-height: 1.25;
+    word-break: break-word;
+}
+
+@media (max-width: 768px) {
+    .scenario-preview-card {
+        min-width: 100%;
+        max-width: 100%;
+        flex-basis: 100%;
+    }
+}
+
 .btn-primary {
     background: var(--accent-dark);
     color: #ffffff;
@@ -1376,4 +1444,244 @@ tbody tr:hover {
     color: var(--text-primary);
     font-family: var(--font-mono);
 }
+
+/* ==========================================================================
+   CRITICAL EMERGENCY ALERT MODAL
+   ========================================================================== */
+
+.emergency-alert-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.82);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    padding: 20px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.emergency-alert-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.emergency-alert-modal {
+    background: #09090b;
+    border: 2px solid #ef4444;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 620px;
+    box-shadow: 0 0 35px rgba(239, 68, 68, 0.45), 0 20px 40px rgba(0, 0, 0, 0.9);
+    color: #f8fafc;
+    overflow: hidden;
+    transform: scale(0.94) translateY(12px);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: emergencyPulse 3s infinite ease-in-out;
+}
+
+.emergency-alert-overlay.active .emergency-alert-modal {
+    transform: scale(1) translateY(0);
+}
+
+@keyframes emergencyPulse {
+    0% {
+        box-shadow: 0 0 24px rgba(239, 68, 68, 0.35), 0 10px 30px rgba(0, 0, 0, 0.8);
+        border-color: rgba(239, 68, 68, 0.75);
+    }
+    50% {
+        box-shadow: 0 0 42px rgba(239, 68, 68, 0.7), 0 15px 40px rgba(0, 0, 0, 0.95);
+        border-color: rgba(239, 68, 68, 1);
+    }
+    100% {
+        box-shadow: 0 0 24px rgba(239, 68, 68, 0.35), 0 10px 30px rgba(0, 0, 0, 0.8);
+        border-color: rgba(239, 68, 68, 0.75);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .emergency-alert-modal {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+    }
+    .emergency-alert-overlay {
+        transition: none !important;
+    }
+}
+
+.emergency-alert-header {
+    background: linear-gradient(180deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.05) 100%);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.35);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.emergency-alert-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.emergency-alert-icon {
+    font-size: 22px;
+    line-height: 1;
+    filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8));
+}
+
+.emergency-alert-title {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #ef4444;
+    margin: 0;
+}
+
+.emergency-badge-critical {
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.emergency-alert-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.emergency-incident-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+}
+
+.emergency-incident-agent {
+    font-weight: 700;
+    color: #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.emergency-incident-mode {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.emergency-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+
+.emergency-detail-card {
+    background: rgba(24, 24, 27, 0.6);
+    border: 1px solid #27272a;
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.emergency-detail-card.full-width {
+    grid-column: 1 / -1;
+}
+
+.emergency-detail-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #71717a;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.emergency-detail-val {
+    font-size: 13px;
+    font-weight: 600;
+    color: #f1f5f9;
+}
+
+.emergency-detail-val.danger {
+    color: #f87171;
+    font-weight: 700;
+}
+
+.emergency-alert-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    background: #09090b;
+    border-top: 1px solid #27272a;
+}
+
+.btn-emergency-primary {
+    background: #ef4444;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 12px;
+    padding: 9px 16px;
+    border-radius: 6px;
+    border: 1px solid #dc2626;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-emergency-primary:hover {
+    background: #dc2626;
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.55);
+}
+
+.btn-emergency-secondary {
+    background: transparent;
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 9px 16px;
+    border-radius: 6px;
+    border: 1px solid #3f3f46;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-emergency-secondary:hover {
+    background: #18181b;
+    color: #f8fafc;
+    border-color: #71717a;
+}
+
 

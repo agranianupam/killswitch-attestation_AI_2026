@@ -16,6 +16,7 @@ class Alert(Base):
     recommended_action = Column(Text, nullable=True)
     experiment_id = Column(String, nullable=True)
     channel_or_op_id = Column(String, nullable=True)
+    scenario_id = Column(String, nullable=True)
     acknowledged = Column(Boolean, default=False)
     created_at = Column(DateTime, default=utcnow)
 
@@ -29,6 +30,7 @@ class Alert(Base):
             "recommended_action": self.recommended_action,
             "experiment_id": self.experiment_id,
             "channel_or_op_id": self.channel_or_op_id,
+            "scenario_id": self.scenario_id,
             "acknowledged": self.acknowledged,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }

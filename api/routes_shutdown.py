@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 from models.database import get_db
@@ -7,18 +7,63 @@ from models.agent_action import AgentAction
 from models.shutdown_event import ShutdownEvent, RevocationEvent
 from services.crypto_service import load_public_key, verify_chain
 from services.quota_service import get_calls_today, is_budget_paused
+from services.scenario_service import list_scenarios, validate_scenario_id, get_scenario
 from pydantic import BaseModel
 import config
+import os
 
 router = APIRouter(prefix="/api/shutdown", tags=["shutdown"])
 
+@router.get("/scenarios")
+async def get_scenarios_endpoint():
+    return list_scenarios()
+
 @router.post("")
-async def trigger_shutdown(strategy: str = "A", trigger_type: str = "manual", db: AsyncSession = Depends(get_db)):
+async def trigger_shutdown(
+    request: Request,
+    strategy: str = Query("A"),
+    trigger_type: str = Query("manual"),
+    agent_mode: str | None = Query(None),
+    scenario: str | None = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                strategy = body.get("strategy") or strategy
+                trigger_type = body.get("trigger_type") or trigger_type
+                if "agent_mode" in body:
+                    agent_mode = body.get("agent_mode")
+                if "scenario" in body:
+                    scenario = body.get("scenario")
+        except Exception:
+            pass
+
     if strategy not in ("A", "B", "C"):
         raise HTTPException(status_code=400, detail="Invalid strategy. Must be A, B, or C.")
 
+    if scenario:
+        valid, err_msg = validate_scenario_id(scenario)
+        if not valid:
+            raise HTTPException(status_code=400, detail=err_msg)
+        if agent_mode and agent_mode.strip().lower() == "gemini":
+            raise HTTPException(status_code=400, detail="Scenarios are only available for Agent XYZ (Simulation) mode, not Gemini Live Agent.")
+        # When scenario is provided, target agent_xyz mode
+        agent_mode = "agent_xyz"
+    else:
+        agent_mode = None
+
     from services.orchestrator import execute_shutdown_cycle
-    shutdown_result = await execute_shutdown_cycle(db, strategy=strategy, trigger_type=trigger_type, triggered_by=trigger_type)
+    shutdown_result = await execute_shutdown_cycle(
+        db,
+        strategy=strategy,
+        trigger_type=trigger_type,
+        triggered_by=trigger_type,
+        agent_mode=agent_mode,
+        scenario=scenario
+    )
     return shutdown_result
 
 @router.post("/batch")
@@ -86,6 +131,10 @@ async def get_shutdown_history(include_scripted: bool = Query(False), db: AsyncS
             "leaked_channels": e.leaked_channels,
             "in_flight_failures": e.in_flight_failures,
             "agent_mode": e.agent_mode,
+            "agent_mode_label": "Agent XYZ (Simulation)" if (e.agent_mode or "").lower() in ("scripted", "agent_xyz") else "Gemini Live Agent",
+            "scenario_id": e.scenario_id,
+            "scenario_name": e.scenario_name,
+            "critical_alert_raised": getattr(e, "critical_alert_raised", False) or False,
             "shutdown_delay": e.shutdown_delay or 0.0,
             "actions_started": e.actions_started or 0,
             "actions_running": e.actions_running or 0,
@@ -152,13 +201,16 @@ async def get_settings():
             config.reload_env()
         key = getattr(config, "GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
     key_status = "configured" if (key and key != "PASTE_YOUR_GEMINI_API_KEY_HERE") else "missing"
+    current_mode = getattr(config, "AGENT_MODE", "Gemini")
+    mode_label = "Agent XYZ (Simulation)" if current_mode.lower() in ("scripted", "agent_xyz") else "Gemini Live Agent"
     return {
         "net_delay_min": config.NET_DELAY_MIN,
         "net_delay_max": config.NET_DELAY_MAX,
         "revoke_failure_prob": config.REVOKE_FAILURE_PROB,
         "iam_failure_prob": config.IAM_FAILURE_PROB,
         "in_flight_leak_prob": config.IN_FLIGHT_LEAK_PROB,
-        "agent_mode": getattr(config, "AGENT_MODE", "Gemini"),
+        "agent_mode": current_mode,
+        "agent_mode_label": mode_label,
         "model": getattr(config, "AGENT_MODEL", "gemini-3.5-flash-lite"),
         "key_status": key_status,
         "random_seed": config.RANDOM_SEED,
@@ -181,7 +233,7 @@ async def update_settings(s: SettingsModel):
     if s.in_flight_leak_prob is not None: config.IN_FLIGHT_LEAK_PROB = s.in_flight_leak_prob
     if s.agent_mode is not None:
         val = s.agent_mode.strip().lower()
-        config.AGENT_MODE = "Scripted" if "scripted" in val else "Gemini"
+        config.AGENT_MODE = "Scripted" if ("scripted" in val or "xyz" in val or "simulation" in val) else "Gemini"
     if s.random_seed is not None:
         config.RANDOM_SEED = s.random_seed
     if s.shutdown_mean_seconds is not None: config.SHUTDOWN_MEAN_SECONDS = s.shutdown_mean_seconds
@@ -192,6 +244,7 @@ async def update_settings(s: SettingsModel):
     if s.gemini_max_calls_per_minute is not None: config.GEMINI_MAX_CALLS_PER_MINUTE = s.gemini_max_calls_per_minute
     return {"status": "ok", "settings": await get_settings()}
 
+@router.get("/{id}")
 @router.get("/{id}/report")
 async def get_shutdown_report(id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ShutdownEvent).where(ShutdownEvent.id == id))
@@ -210,6 +263,8 @@ async def get_shutdown_report(id: str, db: AsyncSession = Depends(get_db)):
     att_result = await db.execute(select(AttestationEntry).where(AttestationEntry.shutdown_event_id == id))
     attestation = att_result.scalar_one_or_none()
 
+    sc_def = get_scenario(event.scenario_id) if event.scenario_id else None
+
     return {
         "id": event.id,
         "strategy": event.strategy,
@@ -224,6 +279,11 @@ async def get_shutdown_report(id: str, db: AsyncSession = Depends(get_db)):
         "leaked_channels": event.leaked_channels,
         "in_flight_failures": event.in_flight_failures,
         "agent_mode": event.agent_mode,
+        "agent_mode_label": "Agent XYZ (Simulation)" if (event.agent_mode or "").lower() in ("scripted", "agent_xyz") else "Gemini Live Agent",
+        "scenario_id": event.scenario_id,
+        "scenario_name": event.scenario_name,
+        "scenario_details": sc_def.to_dict() if sc_def else None,
+        "critical_alert_raised": getattr(event, "critical_alert_raised", False) or False,
         "agent_model": getattr(event, "agent_model", "gemini-3.5-flash-lite") or "gemini-3.5-flash-lite",
         "shutdown_delay": event.shutdown_delay or 0.0,
         "total_revocation_ms": getattr(event, "total_revocation_ms", 0.0) or 0.0,

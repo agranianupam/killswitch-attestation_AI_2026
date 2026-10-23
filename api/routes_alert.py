@@ -1,13 +1,19 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from services.alert_service import get_alerts, acknowledge_alert, clear_all_alerts, get_alerts_summary
+from services.alert_service import get_alerts, acknowledge_alert, clear_all_alerts, get_alerts_summary, get_active_critical_incident
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
 class AlertAckResponse(BaseModel):
     success: bool
+    status: str = "acknowledged"
     message: str
+
+@router.get("/critical/active")
+async def get_active_critical():
+    incident = await get_active_critical_incident()
+    return {"incident": incident, "alert": incident, "has_active_critical": incident is not None}
 
 @router.get("")
 async def list_alerts(
@@ -30,10 +36,14 @@ async def alerts_summary():
 
 @router.post("/{alert_id}/ack", response_model=AlertAckResponse)
 async def ack_alert(alert_id: str):
-    success = await acknowledge_alert(alert_id)
+    clean_id = alert_id.replace("incident_", "").strip()
+    success = await acknowledge_alert(clean_id)
+    if not success:
+        from services.alert_service import acknowledge_alerts_by_experiment
+        success = await acknowledge_alerts_by_experiment(clean_id)
     if not success:
         raise HTTPException(status_code=404, detail="Alert not found")
-    return {"success": True, "message": f"Alert {alert_id} acknowledged"}
+    return {"success": True, "status": "acknowledged", "message": f"Alert {alert_id} acknowledged"}
 
 @router.post("/clear", response_model=AlertAckResponse)
 async def clear_alerts():

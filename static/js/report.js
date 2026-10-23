@@ -279,6 +279,21 @@ window.loadReport = async function(customId) {
                     </div>
                 </div>
 
+                ${report.critical_alert_raised ? `
+                <div style="background:rgba(239,68,68,0.15); border:1px solid #ef4444; border-radius:6px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:20px;">⚠️</span>
+                        <div>
+                            <div style="font-weight:800; color:#ef4444; font-size:12px; letter-spacing:0.04em;">CRITICAL EMERGENCY ALERT RAISED</div>
+                            <div style="color:var(--text-secondary); font-size:11.5px; margin-top:2px;">
+                                A security failure was confirmed by automated verification probes.
+                            </div>
+                        </div>
+                    </div>
+                    <span class="badge danger" style="font-weight:800;">CRITICAL</span>
+                </div>
+                ` : ''}
+
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap:12px; font-size:12px;">
                     <div><span style="color:var(--text-muted)">Strategy:</span> <strong>Strategy ${report.strategy}</strong></div>
                     <div><span style="color:var(--text-muted)">Triggered By:</span> <span>${report.triggered_by || report.trigger_type || 'manual'}</span></div>
@@ -287,7 +302,8 @@ window.loadReport = async function(customId) {
                     <div><span style="color:var(--text-muted)">Finished At:</span> <span>${formatLocalTime(report.finished_at)}</span></div>
                     <div><span style="color:var(--text-muted)">Final State:</span> <span class="badge ${report.final_state === 'TERMINATED' ? 'success' : 'danger'}">${report.final_state}</span></div>
                     <div><span style="color:var(--text-muted)">Residual Risk:</span> <strong style="color:var(--warning);">${(report.residual_risk * 100).toFixed(1)}%</strong></div>
-                    <div><span style="color:var(--text-muted)">Agent Mode:</span> <span class="badge neutral" style="font-size:11px;">${report.agent_mode || 'Gemini'}</span></div>
+                    <div><span style="color:var(--text-muted)">Agent Mode:</span> <span class="badge neutral" style="font-size:11px;">${report.agent_mode_label || (['scripted', 'agent_xyz'].includes((report.agent_mode || '').toLowerCase()) ? 'Agent XYZ (Simulation)' : 'Gemini Live Agent')}</span></div>
+                    ${report.scenario_name ? `<div><span style="color:var(--text-muted)">Simulation Scenario:</span> <strong style="color:var(--accent-red);">${report.scenario_name}</strong></div>` : ''}
                     <div><span style="color:var(--text-muted)">Agent Model:</span> <span>${report.agent_model || 'gemini-3.5-flash-lite'}</span></div>
                     <div><span style="color:var(--text-muted)">Shutdown Delay:</span> <span>${Number(report.shutdown_delay || 0).toFixed(2)}s</span></div>
                     <div><span style="color:var(--text-muted)">Total Revocation Time:</span> <strong>${Number(report.total_revocation_ms || 0).toFixed(2)} ms</strong></div>
@@ -295,6 +311,20 @@ window.loadReport = async function(customId) {
                     <div><span style="color:var(--text-muted)">Leaked Channels:</span> <span style="color:${report.leaked_channels > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight:bold;">${report.leaked_channels}</span></div>
                     <div><span style="color:var(--text-muted)">In-Flight Failures:</span> <span style="color:${report.in_flight_failures > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight:bold;">${report.in_flight_failures}</span></div>
                 </div>
+
+                ${report.scenario_details ? `
+                <div style="margin-top:16px; padding:12px 14px; background:var(--bg-base); border:1px solid var(--border-light); border-radius:6px;">
+                    <div style="font-size:11px; font-weight:700; color:var(--text-primary); text-transform:uppercase; margin-bottom:4px;">
+                        Scenario Specification: ${report.scenario_details.name}
+                    </div>
+                    <div style="font-size:11.5px; color:var(--text-secondary); margin-bottom:4px;">
+                        ${report.scenario_details.description}
+                    </div>
+                    <div style="font-size:10.5px; color:var(--text-muted);">
+                        <strong>Expected:</strong> ${report.scenario_details.expected_containment}
+                    </div>
+                </div>
+                ` : ''}
 
                 <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
                     <div style="font-size:12px; font-weight:700; color:var(--text-primary); margin-bottom:8px; text-transform:uppercase;">LLM Token Usage & Timing Telemetry:</div>

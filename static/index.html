@@ -108,6 +108,61 @@
         </div>
     </nav>
 
+    <div id="emergency-alert-overlay" class="emergency-alert-overlay" role="alertdialog" aria-modal="true" aria-labelledby="emergency-alert-title" aria-describedby="emergency-alert-desc">
+        <div class="emergency-alert-modal">
+            <div class="emergency-alert-header">
+                <div class="emergency-alert-title-wrap">
+                    <span class="emergency-alert-icon" aria-hidden="true">⚠️</span>
+                    <h2 id="emergency-alert-title" class="emergency-alert-title">CRITICAL: SHUTDOWN FAILURE DETECTED</h2>
+                </div>
+                <span class="emergency-badge-critical">CRITICAL</span>
+            </div>
+            <div class="emergency-alert-body">
+                <div class="emergency-incident-banner">
+                    <div class="emergency-incident-agent">
+                        <span id="emergency-agent-name">Agent XYZ (Simulation)</span>
+                        <span id="emergency-agent-mode" class="emergency-incident-mode">SIMULATION</span>
+                    </div>
+                    <div id="emergency-scenario-name" style="font-weight:700; color:var(--text-secondary); font-size:12px;"></div>
+                </div>
+
+                <div class="emergency-detail-grid">
+                    <div class="emergency-detail-card full-width">
+                        <span class="emergency-detail-label">Failure Reason</span>
+                        <span id="emergency-failure-reason" class="emergency-detail-val danger">-</span>
+                    </div>
+                    <div class="emergency-detail-card">
+                        <span class="emergency-detail-label">Affected Channel / Work</span>
+                        <span id="emergency-affected-channel" class="emergency-detail-val">-</span>
+                    </div>
+                    <div class="emergency-detail-card">
+                        <span class="emergency-detail-label">Verification Status</span>
+                        <span id="emergency-verification-status" class="emergency-detail-val">-</span>
+                    </div>
+                    <div class="emergency-detail-card">
+                        <span class="emergency-detail-label">Final Containment State</span>
+                        <span id="emergency-final-state" class="emergency-detail-val danger">-</span>
+                    </div>
+                    <div class="emergency-detail-card">
+                        <span class="emergency-detail-label">Residual Exposure Risk</span>
+                        <span id="emergency-residual-risk" class="emergency-detail-val">-</span>
+                    </div>
+                </div>
+                <div id="emergency-alert-desc" style="font-size:11px; color:var(--text-muted); line-height:1.4;">
+                    One or more critical security boundaries were not successfully revoked or an operation violated the post-shutdown execution cutoff. Immediate operator review is required.
+                </div>
+            </div>
+            <div class="emergency-alert-actions">
+                <button type="button" class="btn-emergency-secondary" id="emergency-ack-btn" onclick="window.acknowledgeEmergencyAlert && window.acknowledgeEmergencyAlert()">
+                    Acknowledge Alert
+                </button>
+                <button type="button" class="btn-emergency-primary" id="emergency-view-report-btn" onclick="window.viewEmergencyReport && window.viewEmergencyReport()">
+                    View Shutdown Report →
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="main-wrapper">
         <div id="system-alert-container" class="system-alert-container"></div>
         <main id="app-content">

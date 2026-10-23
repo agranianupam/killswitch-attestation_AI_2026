@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from services.scheduler_service import start_scheduler, stop_scheduler, get_scheduler_status
+from services.scheduler_service import start_scheduler, stop_scheduler, pause_scheduler, resume_scheduler, get_scheduler_status
 
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
 
@@ -35,6 +35,16 @@ async def api_start_scheduler(
 async def api_stop_scheduler():
     stop_scheduler()
     return {"status": "Scheduler stopped"}
+
+@router.post("/pause")
+async def api_pause_scheduler(reason: str | None = None):
+    pause_scheduler(reason=reason)
+    return {"status": "Scheduler paused", "running": False, "is_paused": True, "reason": reason}
+
+@router.post("/resume")
+async def api_resume_scheduler():
+    resume_scheduler()
+    return {"status": "Scheduler resumed", "running": True, "is_paused": False}
 
 @router.post("/toggle")
 async def api_toggle_scheduler(req: SchedulerToggleRequest):

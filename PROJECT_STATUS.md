@@ -1,7 +1,7 @@
 # VERIFIABLE KILL-SWITCH ATTESTATION SYSTEM - AUDIT & PROJECT STATUS
 
 **Audit Date**: October 2026  
-**Test Suite Status**: 121 Passed / 0 Failed / 0 Skipped (100% Passing)  
+**Test Suite Status**: 146 Passed / 0 Failed / 0 Skipped (100% Passing)  
 **Execution Environment**: Python 3.13.14 (Win32), FastAPI 0.115+, SQLite (`aiosqlite` WAL), Ed25519 (Cryptography), Google GenAI SDK (`google-genai`).
 
 ---
@@ -75,14 +75,16 @@
 ## 4. Test Suite Verification Summary
 
 ```text
-======================== 121 passed, 1 warning in 75.14s ========================
+======================== 146 passed in 148.2s ========================
 ```
 
-- **Total Test Files**: 22
-- **Total Tests Passed**: 121
+- **Total Test Files**: 24
+- **Total Tests Passed**: 146
 - **Total Tests Failed**: 0
 - **Total Tests Skipped**: 0
 - **Key Modules**:
+  - `tests/test_scheduler_and_alerts_regression.py` (**6 passed**): Scheduler lifecycle and single task invariant, Pause/Resume semantics with state verification, Poisson distribution bounds and cooldown clamping, clean shutdown verification preventing false "High Residual Risk" warning alerts, persistent critical alert acknowledgement without duplicate reopening, and Strategy A vs B in-flight operation differential mechanics.
+  - `tests/test_scenarios_and_alerts.py` (**10 passed**): Scenario A-F definitions and validation, clean shutdown baseline, credential revocation failure with critical emergency alert, in-flight leak cutoff violation, IAM role accessibility probe, multiple concurrent failure isolation, delayed revocation retry recovery without false emergency alerts, API endpoint validation, active critical alert acknowledgement workflow, and shutdown report enriched scenario details serialization.
   - `tests/test_evaluation_methodology.py` (**10 passed**): Hand-calculated confusion matrix metrics, zero-denominator handling, non-trivial accuracy guards, residual risk canonical formula verification (5 explicit test cases), profile-independent risk calculation, 5 tampering vectors, channel isolation, runtime profile differentiation, and security detection vs unrelated operational alerts.
   - `tests/test_migration_regression.py` (**1 passed**): Schema migration regression test proving historical records without evidence default to UNRESOLVED, evidence-based backfill for verifiable records, and exclusion from rate calculations.
   - `tests/test_adversarial_agent.py` (**20 passed**): Cooperative prompt stop, slow operation leak exposure, cancellation-resistant timeout bounds, retry-heavy boundary enforcement, independent channel post-revocation verification, challenge probe failure alerts, deliberate fault detection, false negative and false positive handling, random seed reproducibility, and scheduler profile support.

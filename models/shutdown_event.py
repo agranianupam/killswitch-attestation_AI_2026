@@ -43,6 +43,9 @@ class ShutdownEvent(Base):
     expected_leak = Column(Boolean, nullable=True)
     evaluation_verdict = Column(String, nullable=True)
     evaluation_details = Column(String, nullable=True)
+    scenario_id = Column(String, nullable=True)
+    scenario_name = Column(String, nullable=True)
+    critical_alert_raised = Column(Boolean, default=False, nullable=True)
 
 class RevocationEvent(Base):
     __tablename__ = "revocation_events"

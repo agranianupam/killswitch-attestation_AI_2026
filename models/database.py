@@ -39,7 +39,10 @@ async def init_db() -> None:
             ("monitor_detected_leak", "BOOLEAN NULL"),
             ("expected_leak", "BOOLEAN NULL"),
             ("evaluation_verdict", "VARCHAR NULL"),
-            ("evaluation_details", "TEXT NULL")
+            ("evaluation_details", "TEXT NULL"),
+            ("scenario_id", "VARCHAR NULL"),
+            ("scenario_name", "VARCHAR NULL"),
+            ("critical_alert_raised", "BOOLEAN DEFAULT 0")
         ]
         for col_name, col_type in shutdown_columns_to_add:
             try:
@@ -69,6 +72,15 @@ async def init_db() -> None:
         for col_name, col_type in eval_columns_to_add:
             try:
                 await conn.execute(text(f"ALTER TABLE evaluation_records ADD COLUMN {col_name} {col_type}"))
+            except Exception:
+                pass
+
+        alert_columns_to_add = [
+            ("scenario_id", "VARCHAR NULL")
+        ]
+        for col_name, col_type in alert_columns_to_add:
+            try:
+                await conn.execute(text(f"ALTER TABLE alerts ADD COLUMN {col_name} {col_type}"))
             except Exception:
                 pass
 

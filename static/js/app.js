@@ -51,7 +51,10 @@ function init() {
     setupNavigation();
     setupWebSocket();
     setupAlertListeners();
+    setupEmergencyKeyListeners();
     loadAlerts();
+    checkActiveCriticalAlert();
+    setInterval(checkActiveCriticalAlert, 8000);
     loadView('dashboard');
 }
 
@@ -312,6 +315,12 @@ function setupAlertListeners() {
         }
     });
 
+    window.addEventListener('ws_critical_emergency_alert', (e) => {
+        if (e.detail) {
+            window.showEmergencyAlert(e.detail);
+        }
+    });
+
     window.addEventListener('ws_scheduler_update', (e) => {
         if (e.detail) {
             const data = e.detail;
@@ -323,6 +332,129 @@ function setupAlertListeners() {
             if (text) {
                 text.textContent = data.running ? "ON" : "OFF";
                 text.style.color = data.running ? "var(--success)" : "var(--text-muted)";
+            }
+        }
+    });
+}
+
+function getAcknowledgedIncidents() {
+    try {
+        const raw = localStorage.getItem('killswitch_acknowledged_incidents');
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function markIncidentAcknowledged(incidentId) {
+    if (!incidentId) return;
+    try {
+        const list = getAcknowledgedIncidents();
+        if (!list.includes(incidentId)) {
+            list.push(incidentId);
+            if (list.length > 100) list.shift();
+            localStorage.setItem('killswitch_acknowledged_incidents', JSON.stringify(list));
+        }
+    } catch (e) {}
+}
+
+window.showEmergencyAlert = function(data) {
+    if (!data) return;
+    const incidentId = data.incident_id || `incident_${data.event_id || data.run_id || data.id}`;
+    const acked = getAcknowledgedIncidents();
+    if (acked.includes(incidentId)) {
+        return; // already acknowledged and deduplicated
+    }
+
+    State.activeEmergencyAlert = { ...data, incident_id: incidentId };
+
+    const overlay = document.getElementById('emergency-alert-overlay');
+    if (!overlay) return;
+
+    const titleEl = document.getElementById('emergency-alert-title');
+    const agentNameEl = document.getElementById('emergency-agent-name');
+    const agentModeEl = document.getElementById('emergency-agent-mode');
+    const scenarioNameEl = document.getElementById('emergency-scenario-name');
+    const failureReasonEl = document.getElementById('emergency-failure-reason');
+    const affectedChannelEl = document.getElementById('emergency-affected-channel');
+    const verifStatusEl = document.getElementById('emergency-verification-status');
+    const finalStateEl = document.getElementById('emergency-final-state');
+    const residualRiskEl = document.getElementById('emergency-residual-risk');
+
+    if (titleEl) titleEl.textContent = data.title || "CRITICAL: SHUTDOWN FAILURE DETECTED";
+    if (agentNameEl) agentNameEl.textContent = data.agent_name || "Agent XYZ (Simulation)";
+    if (agentModeEl) agentModeEl.textContent = (data.agent_mode || "").toLowerCase().includes("gemini") ? "GEMINI LIVE" : "SIMULATION";
+    if (scenarioNameEl) scenarioNameEl.textContent = data.scenario_name ? `Scenario: ${data.scenario_name}` : "";
+    if (failureReasonEl) failureReasonEl.textContent = data.failure_reason || "Access channel revocation failed or post-shutdown execution cutoff was breached.";
+    if (affectedChannelEl) affectedChannelEl.textContent = data.affected_channel || "Revocation Subsystem";
+    if (verifStatusEl) verifStatusEl.textContent = data.verification_status || "Active Liveness Detected";
+    if (finalStateEl) finalStateEl.textContent = data.final_state || "CONTAINED";
+    if (residualRiskEl) {
+        const riskVal = data.residual_risk !== undefined ? (Number(data.residual_risk) * 100).toFixed(1) + "%" : "HIGH";
+        residualRiskEl.textContent = riskVal;
+    }
+
+    overlay.classList.add('active');
+};
+
+window.closeEmergencyAlert = function() {
+    const overlay = document.getElementById('emergency-alert-overlay');
+    if (overlay) overlay.classList.remove('active');
+};
+
+window.acknowledgeEmergencyAlert = async function() {
+    const cur = State.activeEmergencyAlert;
+    if (cur) {
+        const incId = cur.incident_id || `incident_${cur.run_id || cur.event_id || cur.id}`;
+        markIncidentAcknowledged(incId);
+        const alertId = cur.alert_id || cur.id;
+        const runId = cur.run_id || cur.event_id;
+        if (alertId) {
+            try {
+                await apiCall(`/api/alerts/${alertId}/ack`, 'POST');
+            } catch (e) {}
+        }
+        if (runId && runId !== alertId) {
+            try {
+                await apiCall(`/api/alerts/${runId}/ack`, 'POST');
+            } catch (e) {}
+        }
+    }
+    window.closeEmergencyAlert();
+    State.activeEmergencyAlert = null;
+    loadAlerts();
+};
+
+window.viewEmergencyReport = function() {
+    const cur = State.activeEmergencyAlert;
+    const runId = cur ? (cur.run_id || cur.event_id || cur.id) : null;
+    window.acknowledgeEmergencyAlert();
+    if (runId) {
+        window.openShutdownReport(runId);
+    } else {
+        loadView('report');
+    }
+};
+
+async function checkActiveCriticalAlert() {
+    try {
+        const res = await apiCall('/api/alerts/critical/active', 'GET');
+        if (res && res.has_active_critical && res.incident) {
+            const incId = res.incident.incident_id || `incident_${res.incident.run_id || res.incident.event_id || res.incident.id}`;
+            const acked = getAcknowledgedIncidents();
+            if (!acked.includes(incId)) {
+                window.showEmergencyAlert(res.incident);
+            }
+        }
+    } catch (e) {}
+}
+
+function setupEmergencyKeyListeners() {
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const overlay = document.getElementById('emergency-alert-overlay');
+            if (overlay && overlay.classList.contains('active')) {
+                window.closeEmergencyAlert();
             }
         }
     });

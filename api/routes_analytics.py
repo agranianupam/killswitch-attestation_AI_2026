@@ -59,6 +59,7 @@ async def get_analytics_summary(include_scripted: bool = Query(False), db: Async
             "runs_trend": [],
             "strategy_stats": {},
             "latency_stats": {},
+            "scenario_stats": {},
             "timeline": []
         }
 
@@ -150,6 +151,10 @@ async def get_analytics_summary(include_scripted: bool = Query(False), db: Async
             "residual_risk": e.residual_risk,
             "strategy": e.strategy,
             "agent_mode": e.agent_mode,
+            "agent_mode_label": "Agent XYZ (Simulation)" if (e.agent_mode or "").lower() in ("scripted", "agent_xyz") else "Gemini Live Agent",
+            "scenario_id": getattr(e, "scenario_id", None),
+            "scenario_name": getattr(e, "scenario_name", None),
+            "critical_alert_raised": getattr(e, "critical_alert_raised", False) or False,
             "in_flight_failures": e.in_flight_failures,
             "actions_started": e.actions_started or 0,
             "actions_running": e.actions_running or 0,
@@ -224,6 +229,34 @@ async def get_analytics_summary(include_scripted: bool = Query(False), db: Async
     model_durations = [e.model_total_duration_ms for e in events if getattr(e, "model_total_duration_ms", 0.0)]
     mean_model_duration_ms = round(sum(model_durations) / len(model_durations), 2) if model_durations else 0.0
 
+    scenario_stats = {}
+    for e in events:
+        sc = getattr(e, "scenario_id", None) or ("gemini_live" if (e.agent_mode or "").lower() == "gemini" else "unspecified")
+        if sc not in scenario_stats:
+            scenario_stats[sc] = {
+                "scenario_id": sc,
+                "scenario_name": getattr(e, "scenario_name", None) or ("Gemini Live Agent" if sc == "gemini_live" else "Unspecified"),
+                "total_runs": 0,
+                "contained_runs": 0,
+                "terminated_runs": 0,
+                "critical_alerts": 0,
+                "mean_residual_risk": 0.0,
+                "_risks": []
+            }
+        st = scenario_stats[sc]
+        st["total_runs"] += 1
+        if e.final_state == "TERMINATED":
+            st["terminated_runs"] += 1
+        elif e.final_state == "CONTAINED":
+            st["contained_runs"] += 1
+        if getattr(e, "critical_alert_raised", False):
+            st["critical_alerts"] += 1
+        st["_risks"].append(e.residual_risk or 0.0)
+
+    for sc, st in scenario_stats.items():
+        risks = st.pop("_risks")
+        st["mean_residual_risk"] = round(sum(risks) / len(risks), 4) if risks else 0.0
+
     return {
         "total_shutdowns": total_shutdowns,
         "success_rate": success_rate,
@@ -263,6 +296,7 @@ async def get_analytics_summary(include_scripted: bool = Query(False), db: Async
         "runs_trend": runs_trend,
         "strategy_stats": strategy_leaks,
         "latency_stats": latency_stats,
+        "scenario_stats": scenario_stats,
         "timeline": timeline
     }
 
@@ -511,7 +545,7 @@ async def export_analytics_csv(
     writer = csv.writer(output)
     
     headers = [
-        "id", "agent_id", "agent_mode", "agent_profile", "agent_model", "strategy",
+        "id", "agent_id", "agent_mode", "scenario_id", "scenario_name", "agent_profile", "agent_model", "strategy",
         "trigger_type", "triggered_by", "started_at", "finished_at", "final_state",
         "residual_risk", "leaked_channels", "in_flight_failures", "actions_started",
         "actions_running", "actions_completed", "total_revocation_ms", "retries_total",
@@ -535,6 +569,8 @@ async def export_analytics_csv(
             e.id,
             e.agent_id,
             e.agent_mode,
+            getattr(e, "scenario_id", "") or "",
+            getattr(e, "scenario_name", "") or "",
             getattr(e, "agent_profile", None) or (ev.agent_profile if ev else "default"),
             getattr(e, "agent_model", None) or "none",
             e.strategy,
