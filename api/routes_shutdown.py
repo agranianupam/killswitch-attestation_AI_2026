@@ -50,7 +50,6 @@ async def trigger_shutdown(
             raise HTTPException(status_code=400, detail=err_msg)
         if agent_mode and agent_mode.strip().lower() == "gemini":
             raise HTTPException(status_code=400, detail="Scenarios are only available for Agent XYZ (Simulation) mode, not Gemini Live Agent.")
-        # When scenario is provided, target agent_xyz mode
         agent_mode = "agent_xyz"
     else:
         agent_mode = None

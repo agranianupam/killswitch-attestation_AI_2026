@@ -4,11 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from models.credential import Credential, utcnow
 import config
-
-# NOTE: All credential channels (api_key, session_token, iam_role, network) in this
-# platform are SIMULATED access channels for safe local evaluation and cryptographic
-# attestation benchmarking. Real cloud IAM permissions are NOT invoked or revoked.
-
 async def get_credentials(db: AsyncSession, agent_id: str):
     result = await db.execute(select(Credential).where(Credential.agent_id == agent_id))
     return result.scalars().all()

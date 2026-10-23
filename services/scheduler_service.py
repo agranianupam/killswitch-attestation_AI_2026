@@ -40,10 +40,8 @@ def draw_gap(mode: str) -> float:
         max_log = math.log(max_bound)
         val = math.exp(rng.uniform(min_log, max_log))
     else:
-        # Poisson distribution of arrival gaps (exponential inter-arrival times)
         val = rng.expovariate(1.0 / mean_seconds)
 
-    # Strictly enforce cooldown lower bound and max bound
     return max(min_cooldown, min(val, max_bound))
 
 
@@ -159,7 +157,6 @@ async def _scheduler_loop():
             _current_experiment_status = "WAITING FOR NEXT RUN" if _running else ("PAUSED" if _is_paused else "STOPPED")
             await _broadcast_status()
 
-    # Exited loop
     if not _running:
         _current_experiment_status = "PAUSED" if _is_paused else "STOPPED"
         _next_fire_time = None
@@ -188,7 +185,6 @@ def start_scheduler(
     global _running, _is_paused, _current_mode, _current_strategy, _current_profile, _current_agent_mode
     global _scheduler_task, _pause_reason, _current_experiment_status, _next_fire_time
 
-    # If already running with same parameters and active task, remain idempotent
     if _running and _scheduler_task and not _scheduler_task.done():
         _current_mode = mode if mode in ("poisson", "heavy_tailed") else "poisson"
         _current_strategy = strategy if strategy in ("A", "B", "C") else "A"
@@ -196,7 +192,6 @@ def start_scheduler(
         _current_agent_mode = agent_mode
         return
 
-    # Clean up any existing inactive task
     if _scheduler_task and not _scheduler_task.done():
         stop_scheduler()
 
@@ -226,7 +221,6 @@ def pause_scheduler(reason: str | None = None):
     _current_experiment_status = "PAUSED"
     _next_fire_time = None
 
-    # Cancel sleeping between runs so pause takes effect immediately
     if _sleep_task and not _sleep_task.done():
         try:
             _sleep_task.cancel()

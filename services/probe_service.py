@@ -82,7 +82,6 @@ async def run_all_probes(db: AsyncSession, credentials: list[Credential]) -> dic
     for i, (cred_id, _) in enumerate(tasks):
         outcome = raw_results[i]
         if isinstance(outcome, Exception):
-            # Fail closed: unhandled probe failure indicates potential channel liveness
             results[cred_id] = True
         else:
             results[cred_id] = bool(outcome)

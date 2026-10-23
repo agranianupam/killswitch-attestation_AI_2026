@@ -1,7 +1,3 @@
-"""
-services/scenario_service.py - Deterministic Scenario Definitions and Validation for Agent XYZ (Simulation)
-"""
-
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 

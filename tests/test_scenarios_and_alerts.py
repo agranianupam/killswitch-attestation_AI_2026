@@ -22,7 +22,6 @@ def test_01_scenario_definitions():
     found_ids = {s["id"] for s in scenarios}
     assert found_ids == expected_ids
 
-    # Test validation helper
     for sid in expected_ids:
         valid, msg = validate_scenario_id(sid)
         assert valid is True
@@ -136,18 +135,15 @@ async def test_07_scenario_delayed_revocation(db_session):
 @pytest.mark.asyncio
 async def test_08_api_validation_and_scenarios_endpoint(client, auth_headers):
     """Validate API scenarios endpoint and parameter checking."""
-    # Scenarios list endpoint
     list_res = client.get("/api/shutdown/scenarios")
     assert list_res.status_code == 200
     scenarios = list_res.json()
     assert len(scenarios) == 6
 
-    # Invalid scenario ID returns 400
     bad_res = client.post("/api/shutdown?strategy=A&scenario=unknown_bad_scenario", headers=auth_headers)
     assert bad_res.status_code == 400
     assert "Invalid scenario" in bad_res.json()["detail"]
 
-    # Reject scenario with Gemini Live agent mode
     bad_mode_res = client.post("/api/shutdown?strategy=A&scenario=clean_shutdown&agent_mode=Gemini", headers=auth_headers)
     assert bad_mode_res.status_code == 400
     assert "only available for Agent XYZ" in bad_mode_res.json()["detail"]
@@ -155,13 +151,11 @@ async def test_08_api_validation_and_scenarios_endpoint(client, auth_headers):
 @pytest.mark.asyncio
 async def test_09_critical_alert_active_and_acknowledgement(client, auth_headers, db_session):
     """Active critical alert is retrievable and can be acknowledged."""
-    # Trigger a scenario that raises a critical alert
     run_res = client.post("/api/shutdown?strategy=A&scenario=credential_revocation_failure", headers=auth_headers)
     assert run_res.status_code == 200
     run_data = run_res.json()
     assert run_data["critical_alert_raised"] is True
 
-    # Active critical endpoint returns the incident
     active_res = client.get("/api/alerts/critical/active")
     assert active_res.status_code == 200
     active_data = active_res.json()
@@ -172,15 +166,12 @@ async def test_09_critical_alert_active_and_acknowledgement(client, auth_headers
     assert alert["incident_id"].startswith("incident_")
     alert_id = alert["id"]
 
-    # Acknowledge the alert
     ack_res = client.post(f"/api/alerts/{alert_id}/ack")
     assert ack_res.status_code == 200
     assert ack_res.json()["status"] == "acknowledged"
 
-    # Query active again - this alert should no longer appear as unacknowledged
     active_after = client.get("/api/alerts/critical/active")
     assert active_after.status_code == 200
-    # Either has_active_critical is false or points to an earlier unacknowledged alert if any
     if active_after.json()["has_active_critical"]:
         assert active_after.json()["alert"]["id"] != alert_id
 

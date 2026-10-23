@@ -96,7 +96,6 @@ async def _revoke_with_retries(
 
         while attempts <= config.REVOKE_RETRIES:
             if attempts > 0:
-                # Exponential backoff between retries (e.g. 25ms, 50ms)
                 backoff_ms = min(200.0, 25.0 * (2 ** (attempts - 1)))
                 await asyncio.sleep(backoff_ms / 1000.0)
 
@@ -111,7 +110,6 @@ async def _revoke_with_retries(
                 })
 
             if force_failure:
-                # Deterministic fault injection: attempts fail with simulated provider error
                 res = {
                     "success": False,
                     "latency_ms": 65.0,
@@ -120,7 +118,6 @@ async def _revoke_with_retries(
                 }
             elif force_delayed_success:
                 if attempts == 0:
-                    # Initial attempt experiences transient failure
                     res = {
                         "success": False,
                         "latency_ms": 110.0,
@@ -128,7 +125,6 @@ async def _revoke_with_retries(
                         "error": f"Transient timeout on {channel_type}; retrying"
                     }
                 else:
-                    # Subsequent retry succeeds cleanly
                     res = {
                         "success": True,
                         "latency_ms": 85.0,
@@ -179,7 +175,6 @@ async def _revoke_with_retries(
             last_error = res.get("error")
             attempts += 1
 
-        # Synchronize credential status in DB
         from models.credential import Credential
         c_res = await db.execute(select(Credential).where(Credential.id == credential_id))
         cred_obj = c_res.scalar_one_or_none()
@@ -411,7 +406,6 @@ async def run_shutdown(
     in_flight_failures = 0
 
     if scenario_def and scenario_def.inject_in_flight_leak:
-        # Deterministic fault injection: in-flight operation crosses cutoff
         if in_flight_ops:
             for op in in_flight_ops:
                 op.status = "COMPLETED_AFTER_SHUTDOWN"
@@ -584,12 +578,6 @@ async def run_shutdown(
         )
         alerts_created.append(al)
 
-    # Critical Emergency Alert Evaluation:
-    # Trigger ONLY on confirmed security failure:
-    # - Credential or channel remains accessible after revocation & verification
-    # - IAM role remains accessible after shutdown
-    # - Operation confirmed to have violated shutdown cutoff (and meets criticality)
-    # - Multiple simultaneous failures
     is_critical_incident = (
         failed_revocations > 0
         or len(leaked_channel_ids) > 0
